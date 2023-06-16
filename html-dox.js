@@ -1,6 +1,6 @@
-let templates = []
+let templates = [];
 let importsTag = document.querySelector('imports')
-importsTag.style.display = 'none'
+importsTag.style.visibility = 'hidden'
 // remove whitespace
 let imports = importsTag.innerHTML.replace(/\s/g, '')
 // split by comma
@@ -15,6 +15,7 @@ if (document.querySelector('script') && !document.querySelector('script').getAtt
 } else if (document.querySelector('link')) {
     throw new Error('Link tags are not supported in dox!')
 }
+document.body.style.visibility = 'hidden'
 let types = []
 // constraint types - for type checking
 
@@ -33,6 +34,7 @@ let contraintTypes = {
 // import checking // import file if type is valid
 imports.map((item) => {
 
+     
     if (!item.endsWith('.html') && !item.endsWith('.css') && !item.endsWith('.js')) {
         throw new Error('Unsupported imported file type!')
     }
@@ -47,39 +49,41 @@ imports.map((item) => {
                 parser(data);
             });
     } else if (item.endsWith('.css')) {
+        let preload = document.createElement('link')
+        preload.setAttribute('rel', 'preload')
+        preload.setAttribute('href', item)
+        preload.type = 'text/css'
+        preload.setAttribute('as', 'style')
         let link = document.createElement('link')
         link.setAttribute('rel', 'stylesheet')
         link.setAttribute('href', item)
+        link.type = 'text/css'
         document.querySelector('head').appendChild(link)
+        document.querySelector('head').appendChild(preload)
     } else if (item.endsWith('.js')) {
         fetch(item)
             .then((response) => {
                 return response.text();
             })
             .then((data) => {
-                if (data.includes('document')) {
+                if (data.includes('document') && !item.includes('tailwind.js')) {
                     throw new Error('Imported js file cannot contain document use dox instead')
-                }else if (data.includes('innerHTML') || data.includes('innerText') ) {
-                    throw new Error('use dox:ineject() instead of innerHTML or innerText')
+                }else if (data.includes('innerHTML') || data.includes('innerText') && !item.endsWith('tailwind.js')) {
+                    throw new Error('use dox:text  to return text and dox:$ to return html')
                 }
-                let script = document.createElement('script')
-                script.innerHTML = data
-                script.type = 'module'
-                setTimeout(() => {
-                    document.querySelector('body').appendChild(script)
-                }, 100);
+                
+                 let func = new Function(data)
+                 func()
             })
     }
 });
-
-
+ 
 
 const parser = (data) => {
     let dom = new DOMParser();
-    let html = dom.parseFromString(data, 'text/html');
+    let html =  dom.parseFromString(data, 'text/html');
+    html = html.querySelector('html');
     let body = document.querySelector('body');
-    let bodyfunc = body.querySelectorAll('function');
-    let functions = [];
 
 
     let states = [];
@@ -115,7 +119,6 @@ const parser = (data) => {
                 let importName = item.getAttribute('exports').split(',')
                 let dom = new DOMParser();
                 let dhtml = dom.parseFromString(data, 'text/html');
-                let elements = [...dhtml.querySelectorAll('*')].map((item) => item.tagName);
                 if( dhtml.querySelector('export')){
                     let exported = dhtml.querySelector('export').innerHTML.split(',') 
                     
@@ -126,9 +129,10 @@ const parser = (data) => {
                         let el = item.replace(/\s/g, '')
                         importName.map((item) => {
                             if(item == el){
+                             
                                 if(html.querySelector(el)){
                                     body.querySelector(el).innerHTML = dhtml.querySelector(el).innerHTML
-                                }
+                                } 
                             }
                         })
                       }
@@ -182,15 +186,10 @@ const parser = (data) => {
                    
                 }
             });
-
-            // ...
-
-
-            console.log(domlist)
             let supported_queries = ['html-dox$', 'dox$']
 
             let query = supported_queries.find((item) => el.includes(item));
-            console.log(query, el)
+          
             if (!query) {
                 throw new Error('Unsupported query');
             }
@@ -223,6 +222,56 @@ const parser = (data) => {
                     el = el.replace('html-dox$', '')
                     dox.inject(code, el);
                 },
+                getDescendants: () => {
+                    const descendants = [];
+                  
+                    const traverse = (node) => {
+                      descendants.push(node);
+                  
+                      const children = node.children;
+                      for (let i = 0; i < children.length; i++) {
+                        children[i].inject = (code) => {
+                          dox.inject(code, children[i].tagName.toLowerCase());
+                        };
+                        children[i].text = children[i].innerHTML.replace(/\s/g, '');
+                        children[i].$ = children[i].innerHTML;
+                        children[i].querySelector = (element) => {
+                          return dox.querySelector(children[i].tagName.toLowerCase() + ' ' + element);
+                        };
+                        children[i].querySelectorAll = (element) => {
+                          return dox.querySelectorAll(children[i].tagName.toLowerCase() + ' ' + element);
+                        };
+                  
+                        const grandchildren = children[i].children;
+                        for (let j = 0; j < grandchildren.length; j++) {
+                          grandchildren[j].inject = (code) => {
+                            dox.inject(code, grandchildren[j].tagName.toLowerCase());
+                          };
+                           //remove whitespace but keep spaces
+
+                          grandchildren[j].text =   grandchildren[j].innerText;
+                          grandchildren[j].$ = grandchildren[j].innerHTML;
+                          grandchildren[j].querySelector = (element) => {
+                            return dox.querySelector(
+                              grandchildren[j].tagName.toLowerCase() + ' ' + element
+                            );
+                          };
+                          grandchildren[j].querySelectorAll = (element) => {
+                            return dox.querySelectorAll(
+                              grandchildren[j].tagName.toLowerCase() + ' ' + element
+                            );
+                          };
+                  
+                          // Recursively traverse the descendants
+                          traverse(grandchildren[j]);
+                        }
+                      }
+                    };
+                  
+                    traverse(domlist[el]);
+                    return descendants;
+                  },
+                  
                 querySelector: (element) => {
                     el = el.replace('html-dox$', '')
                     dox.querySelector(el + ' ' + element);
@@ -234,6 +283,25 @@ const parser = (data) => {
                 onhover: (callback) => {
                     domlist[el].addEventListener('mouseover', callback)
                 },
+                onmouseout: (callback) => {
+                    domlist[el].addEventListener('mouseout', callback)
+                },
+                onfocus: (callback) => {
+                    domlist[el].addEventListener('focus', callback)
+                },
+                Animation: (animation) => {
+                    domlist[el].style.animation = animation
+                },
+                AnimationEffect: (effect) => {
+                    domlist[el].style.animationEffect = effect
+                },
+                AnimationDelay: (delay) => {
+                    domlist[el].style.animationDelay = delay
+                },
+                AnimationDirection: (direction) => {
+                    domlist[el].style.animationDirection = direction
+                },
+                
                 getChildren: () => {
                     return domlist[el].$children
                 },
@@ -241,11 +309,11 @@ const parser = (data) => {
 
                 setState: (name, value) => {
                     states.map((item) => {
-                        if (item.name === name) {
-                            item.value = value;
-                        }
-                    })
-                },
+                      if (item.name === name) {
+                        item.value = value;
+                      }
+                    });
+                  },
                 getState: (name) => {
                     states.map((item) => {
                         if (item.name === name) {
@@ -286,6 +354,7 @@ const parser = (data) => {
             }
             return {
                 dom: domlist[el],
+                text: domlist[el].innerHTML,
                 outerHTML: domlist[el].outerHTML,
                 outerText: domlist[el].outerText,
                 style: domlist[el].style,
@@ -311,6 +380,62 @@ const parser = (data) => {
                         callback(item);
                     })
                 },
+                getDescendants: () => {
+                    const descendants = [];
+            
+                    const traverse = (node) => {
+                      descendants.push(node);
+            
+                      const children = node.children;
+                      for (let i = 0; i < children.length; i++) {
+                        traverse(children[i]);
+                      }
+                    };
+            
+                    traverse(domlist[el]);
+                    return  {
+                        forEach: (callback) => {
+                            descendants.forEach((item) => {
+                                callback(item);
+                                return {
+                                    querySelector: (element) => {
+                                        descendants.map((item) => {
+                                             dox.querySelector(item.tagName.toLowerCase() + ' ' + element);
+                                        })
+                                    },
+                                    querySelectorAll: (element) => {
+                                        descendants.map((item) => {
+                                            dox.querySelectorAll(item.tagName.toLowerCase() + ' ' + element);
+                                        })
+                                    },
+                                    setState: (name, value) => {
+                                        states.map((item) => {
+                                          if (item.name === name) {
+                                            item.value = value;
+                                          }
+                                        });
+                                      },
+                                    getState: (name) => {
+                                        states.map((item) => {
+                                            if (item.name === name) {
+                                                return item.value;
+                                            }
+                                        }
+                                        )
+                                    },
+                                }
+                            })
+                        },
+                        map: (callback) => {
+                            descendants.map((item) => {
+                                callback(item);
+                            })
+                        },
+                        
+
+
+                    }
+                  },
                 map: (callback) => {
                     domlist[el].map((item) => {
                         callback(item);
@@ -341,6 +466,23 @@ const parser = (data) => {
                         callback(item);
                     })
                 },
+                useState: (initialValue) => {
+                    let state = initialValue;
+                    return [
+                        state,
+                        (newState) => {
+                            state = newState;
+                            watchState(state);
+                        }
+                    ];
+                },
+                watchState: (state, callback) => {
+                    return (newState) => {
+                        state = newState;
+                        callback(state);
+                    };
+                },
+
                 setState: (name, value) => {
                     states.map((item) => {
                         if (item.name === name) {
@@ -395,6 +537,7 @@ const parser = (data) => {
 
 
     }
+    window.dox = dox;
     //  dox functions
 
     let _var = html.querySelectorAll('var');
@@ -555,7 +698,7 @@ const parser = (data) => {
         });
     });
     html.querySelectorAll('type').forEach((item) => {
-        console.log(item)
+       
         // Check if 2 subtypes have the same name
         let subtypes = item.querySelectorAll('subtype');
         let names = [];
@@ -603,7 +746,7 @@ const parser = (data) => {
 
                     if (subtype && strict) {
                         let constraintType = contraintTypes[subtype.constraint];
-                        console.log(constraintType)
+                       
                         let convertedValue;
 
                         if (constraintType === Number) {
@@ -641,134 +784,129 @@ const parser = (data) => {
     _export = _export.innerHTML.replace(/\s/g, '');
     _export = _export.split(',');
     _export = _export.filter(Boolean);
-    _export.map((item) => {
-        console.log(item)
-        let template = html.querySelector(item);
-        let attributes = template.attributes;
-        attributes = Array.from(attributes);
-        attributes.forEach((attribute) => {
-
-            if (template.hasAttribute(attribute)) {
-
-                if (attribute === 'typeof') {
-                    console.log('typeof')
-                    if (types.find((type) => type.name === template.getAttribute(attribute))) {
-                        let type = types.find((type) => type.name === template.getAttribute(attribute));
-                        let constraintType = contraintTypes[type.constraint];
-                        let value = body.querySelector(item).innerHTML;
-                        let convertedValue;
-
-                        if (type.isStrict === 'false') {
-                            return;
-                        }
-                        if (constraintType === Number) {
-                            convertedValue = Number(value);
-                            convertedValue = isNaN(convertedValue) ? 0 : convertedValue;
-                            if (convertedValue === 0) {
-                                throw new Error(`Invalid  value for type "${type.name}": ${value} (expected number)`);
-                            }
-                        } else if (constraintType === Boolean) {
-                            if (value.toLowerCase() === 'true') {
-                                convertedValue = true;
-                            } else if (value.toLowerCase() === 'false') {
-                                convertedValue = false;
-                            } else {
-                                throw new Error(`Invalid value for type "${type.name}": ${value} (expected boolean)`);
-                            }
-                        } else if (constraintType === String) {
-                            convertedValue = value;
-                        } else {
-                            throw new Error(`Invalid constraint type for type "${type.name}": ${type.constraint}`);
-                        }
-                    } else {
-                        throw new Error(`Type "${template.getAttribute(attribute)}" does not exist`);
-
-                    }
+  
+    let positions = new Set();
+    
+    _export.forEach((item) => {
+      let template = html.querySelector(item);
+      let attributes = Array.from(template.attributes).map((attr) => attr.name);
+    
+      attributes.forEach((attribute) => {
+        if (template.hasAttribute(attribute)) {
+          if (attribute === 'typeof') {
+           
+            let type = types.find((type) => type.name === template.getAttribute(attribute));
+    
+            if (type) {
+              let constraintType = contraintTypes[type.constraint];
+              let value = body.querySelector(item).innerHTML;
+              let convertedValue;
+    
+              if (type.isStrict === 'false') {
+                return;
+              }
+    
+              if (constraintType === Number) {
+                convertedValue = Number(value);
+                convertedValue = isNaN(convertedValue) ? 0 : convertedValue;
+                if (convertedValue === 0) {
+                  throw new Error(`Invalid value for type "${type.name}": ${value} (expected number)`);
                 }
-            }
-
-        })
-        if (template.getAttribute('props')) {
-            let props = template.getAttribute('props').split(':')
-            props.map((prop) => {
-                let derivatives = template.querySelectorAll('[derive]')
-                derivatives.forEach((subitem) => {
-                    let attr = subitem.getAttribute('derive');
-                    let derivedvalue = body.querySelector(item).getAttribute(attr);
-                    console.log(derivedvalue)
-                    if (subitem.innerHTML.includes(`{{${attr}}}`)) {
-                        subitem.innerHTML = subitem.innerHTML.replace(`{{${attr}}}`, derivedvalue);
-                    }
-
-
-
-
-
-                })
-                if (template.innerHTML.includes(`{{${prop}}}`)) {
-                    // replace {{prop}} with the value of the prop
-                    template.innerHTML = template.innerHTML.replace(`{{${prop}}}`, body.querySelector(item).getAttribute(prop));
-
+              } else if (constraintType === Boolean) {
+                if (value.toLowerCase() === 'true') {
+                  convertedValue = true;
+                } else if (value.toLowerCase() === 'false') {
+                  convertedValue = false;
+                } else {
+                  throw new Error(`Invalid value for type "${type.name}": ${value} (expected boolean)`);
                 }
-            })
-        }
-        templates.push({
-            name: template.tagName,
-            template: template.innerHTML,
-        });
-
-        let positions = []
-        function renderElement(target, template, position) {
-            if (position === 'first') {
-                target.innerHTML = template.innerHTML + target.innerHTML;
-            } else if (position === 'last') {
-                target.innerHTML = target.innerHTML + template.innerHTML;
-            }
-        }
-
-        let element = body.querySelector(item);
-        if (element) {
-            let parent = element.parentNode;
-            if (parent.tagName === 'RENDER') {
-                let positions = new Set();
-                positions.add(parent);
-
-                positions = Array.from(positions);
-                positions = positions.map((item) => item.getAttribute('position').toLowerCase());
-                positions = positions.filter((item) => item !== 'first' && item !== 'last');
-
-                let execTime = parent.getAttribute('execTime');
-                if (execTime === 'before') {
-                    renderElement(element, template, 'first');
-                    positions.forEach((position) => {
-                        let siblingElement = body.querySelector(`[position="${position}"]`);
-                        if (siblingElement !== null && siblingElement !== element) {
-                            siblingElement.style.display = 'none';
-                        }
-                    });
-                } else if (execTime === 'after') {
-                    renderElement(element, template, 'last');
-                    positions.forEach((position) => {
-                        let siblingElement = body.querySelector(`[position="${position}"]`);
-                        if (siblingElement !== null && siblingElement !== element) {
-                            siblingElement.style.display = 'none';
-                        }
-                    });
-                }
-
-                let attributePos = parent.hasAttribute('position');
-                let position = parent.getAttribute('position');
-                if (attributePos && position === 'first') {
-                    renderElement(element, template, 'first');
-                } else if (attributePos && position === 'last') {
-                    renderElement(element, template, 'last');
-                }
+              } else if (constraintType === String) {
+                convertedValue = value;
+              } else {
+                throw new Error(`Invalid constraint type for type "${type.name}": ${type.constraint}`);
+              }
             } else {
-                throw new Error('The element must be inside a render tag');
+              throw new Error(`Type "${template.getAttribute(attribute)}" does not exist`);
             }
+          }
         }
-
-
+      });
+    
+      if (template.getAttribute('props')) {
+        let props = template.getAttribute('props').split(':');
+        props.forEach((prop) => {
+          let derivatives = template.querySelectorAll('[derive]');
+          derivatives.forEach((subitem) => {
+            let attr = subitem.getAttribute('derive');
+            let derivedvalue = body.querySelector(item).getAttribute(attr);
+          
+            if (subitem.innerHTML.includes(`{{${attr}}}`)) {
+              subitem.innerHTML = subitem.innerHTML.replace(`{{${attr}}}`, derivedvalue);
+            }
+          });
+    
+          if (template.innerHTML.includes(`{{${prop}}}`)) {
+            // replace {{prop}} with the value of the prop
+            template.innerHTML = template.innerHTML.replace(`{{${prop}}}`, body.querySelector(item).getAttribute(prop));
+          }
+        });
+      }
+    
+      templates.push({
+        name: template.tagName,
+        template: template.innerHTML,
+      });
+    
+      let element = body.querySelector(item);
+      if (element) {
+        let parent = element.parentNode;
+        if (parent.tagName === 'RENDER') {
+          positions.add(parent);
+          let execTime = parent.getAttribute('execTime');
+          if (execTime === 'before') {
+            positions.forEach((position) => {
+              let siblingElement = body.querySelector(`[position="${position}"]`);
+              if (siblingElement !== null && siblingElement !== element) {
+                siblingElement.style.display = 'none';
+              }
+            });
+            renderElement(element, template, 'first');
+          } else if (execTime === 'after') {
+            renderElement(element, template, 'last');
+            positions.forEach((position) => {
+              let siblingElement = body.querySelector(`[position="${position}"]`);
+              if (siblingElement !== null && siblingElement !== element) {
+                siblingElement.style.display = 'none';
+              }
+            });
+          }
+    
+          let attributePos = parent.hasAttribute('position');
+          let position = parent.getAttribute('position');
+          if (attributePos && position === 'first') {
+            renderElement(element, template, 'first');
+          } else if (attributePos && position === 'last') {
+            renderElement(element, template, 'last');
+          }
+        } else {
+          throw new Error('The element must be inside a render tag');
+        }
+      }
     });
+    
+    function renderElement(target, template, position) {
+      if (position === 'first') {
+        target.innerHTML = template.innerHTML + target.innerHTML;
+      } else if (position === 'last') {
+        target.innerHTML = target.innerHTML + template.innerHTML;
+      }
+    }
+    
 };
 
+
+document.addEventListener('DOMContentLoaded', () => {
+   setTimeout(() => {
+    document.body.style.visibility = 'visible'
+    }, 200)
+})
