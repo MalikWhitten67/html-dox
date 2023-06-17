@@ -1,0 +1,39 @@
+<!DOCTYPE html  >
+<html lang="en" data-theme="winter" root="/home">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <imports>
+        ./components/app.html,
+        ./assets/daisy-full.css,
+        ./assets/tailwind.js
+    </imports>  
+</head>
+<body>
+
+ 
+<render position="first"
+route="/home"
+>
+    <!-- this is ran first-->
+    <myComponent 
+    text="Sequential Rendering"
+    button="Get Started"
+    learnbtn="Learn More"
+    ></myComponent>
+</render>
+<render position="first"
+route="/car"
+>
+    <!-- this is ran first-->
+    <car
+    text="Sequential Rendering"
+    button="Get Started"
+    learnbtn="Learn More"
+    ></car>
+</render>
+ 
+<script src="./assets/html-dox.js" type="module"></script>
+ 
+</body>
+</html>

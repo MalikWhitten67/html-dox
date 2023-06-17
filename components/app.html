@@ -1,0 +1,70 @@
+<import src="./components/nav.html" exports="nav"></import>
+<import src="./components/footer.html" exports="footer"></import>
+<type name="car" constraint="dox:string" isStrict="false"></type>
+<myComponent props="button:text:learnbtn" typeof="car" 
+>
+ <!--- this is my nav-->
+  <nav></nav>
+ 
+     <div class="relative">
+        <div class="mt-24 flex flex-row">
+             
+            <div class="flex flex-col text-center justify-center mx-auto">
+              <h1 class="text-8xl font-bold">
+                HTML <span class="text-orange-400">DOX</span>
+              </h1>
+              <p class="mt-5 text-center">
+                Fast Lightweight library made to improve your workflow
+              </p>
+              <div class="flex flex-row justify-center mx-auto mt-16 ">
+                <button id="getstartedbtn" class="btn btn-primary w-40 rounded-full">
+                    {{button}}
+                  </button>
+                  <button id="learnbtn" class=" btn btn-ghost border-slate-400 hover:bg-slate-700 hover:text-white ml-5 w-40 rounded-full">
+                    {{learnbtn}}
+                  </button>
+               </div>
+            </div>
+            
+          </div>
+
+          <div class="flex xl:flex-row mb-24  lg:flex-row flex-col justify-center items-center  mt-16 gap-4">
+            <div class="bg-base-100 flex flex-col   relative text-start p-16 rounded-xl shadow-xl w-96">
+              
+              <span class="font-medium text-lg">
+                💡 Instant render times
+              </span>
+              <span class=" text-gray-500 mt-8 text-md text-start">
+                Sequential render order, no more waiting for your components to load. You can choose the render order as first, last, after, or before!
+              </span>
+            </div>
+            <div class="bg-base-100 flex flex-col    relative text-start p-16 rounded-xl shadow-xl w-96">
+               
+                <span class="font-medium text-lg">
+                  🧩 Modular CodeBase
+                </span>
+                <span class=" text-gray-500 mt-8 text-md text-start">
+                 Html Dox is built with modularity in mind, you can import and export components, and even use them as custom elements!
+                </span>
+              </div>
+            
+          </div>
+          
+          
+
+   
+   
+</div>
+<footer    ></footer>
+</div>
+    
+ 
+</myComponent>
+ <car>
+    eeeee
+ </car>
+ 
+<export>
+    myComponent,
+    car
+</export>
