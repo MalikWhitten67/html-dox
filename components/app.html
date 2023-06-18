@@ -1,5 +1,6 @@
 <import src="./components/nav.html" exports="nav"></import>
 <import src="./components/footer.html" exports="footer"></import>
+<import src="./components/changelog.html" exports="changelog"></import>
 <type name="car" constraint="dox:string" isStrict="false"></type>
 <myComponent props="button:text:learnbtn" typeof="car" 
 >
@@ -55,7 +56,7 @@
    
    
 </div>
-<footer    ></footer>
+<footer></footer>
 </div>
     
  
@@ -63,8 +64,28 @@
  <car>
     eeeee
  </car>
- 
+ <error>
+    <div class="flex flex-col text-center justify-center mx-auto">
+        <h1 class="text-8xl font-bold">
+          404
+        </h1>
+        <p class="mt-5 text-center">
+          Page Not Found
+        </p>
+        <div class="flex flex-row justify-center mx-auto mt-16 ">
+          <button id="getstartedbtn" class="btn btn-primary w-40 rounded-full">
+              {{button}}
+            </button>
+            <button id="learnbtn" class=" btn btn-ghost border-slate-400 hover:bg-slate-700 hover:text-white ml-5 w-40 rounded-full">
+              {{learnbtn}}
+            </button>
+         </div>
+      </div>
+ </error>
+
 <export>
     myComponent,
-    car
+
+    car,
+    error
 </export>

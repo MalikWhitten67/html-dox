@@ -1,5 +1,3 @@
-<import src="./components/test.html" exports="test,car"></import>
- 
 <nav>
     <div class="navbar xl:px-24 border border-slate-200 h-6 lg:px-24 lg:py-5 xl:py-5 text-black">
         <div class="flex-1">
@@ -8,7 +6,9 @@
          height="25"
          >
         </img>
-        <p class=" text-lg  text-md font-bold mx-5">HTML <span class="text-orange-400">DOX</span></p>
+        <a href="#/home">
+          <p class=" text-lg  text-md font-bold mx-5">HTML <span class="text-orange-400">DOX</span></p>
+        </a>
         
         <div class="flex-none">
           <ul class="menu menu-horizontal px-1 ">
@@ -30,7 +30,9 @@
                 <ul class="p-2 bg-base-100 shadow-lg w-40 rounded-xl"
                 style="z-index: 9999; background-color: #f5f4f4;"
                 > 
-                  <li><a>
+                  <li><a
+                    href="#/changelog"
+                    >
                      
                     {{versionLogo}}
                     

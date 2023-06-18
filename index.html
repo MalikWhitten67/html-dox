@@ -1,23 +1,26 @@
 <!DOCTYPE html  >
-<html lang="en" data-theme="winter" root="/home">
+<html lang="en" data-theme="winter" >
 <head>
     <meta charset="UTF-8">
+    <meta config  routes="/home,/changelog,/car" fallback="/home" >
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <imports>
+        
         ./components/app.html,
+        ./components/changelog.html,
         ./assets/daisy-full.css,
-        ./assets/tailwind.js
+        ./assets/tailwind.js,
+        ./assets/test.js
+         
     </imports>  
 </head>
 <body>
-
  
 <render position="first"
 route="/home"
 >
     <!-- this is ran first-->
     <myComponent 
-                 // props
     text="Sequential Rendering"
     button="Get Started"
     learnbtn="Learn More"
@@ -34,6 +37,23 @@ route="/car"
     ></car>
 </render>
  
+ 
+<render 
+route="/changelog"
+position="first"
+
+>
+    <!-- this is ran last-->
+    <changelog
+     
+    ></changelog>
+</render>
+ 
+<render
+error
+>
+<error></error>
+</render>
 <script src="./assets/html-dox.js" type="module"></script>
  
 </body>
