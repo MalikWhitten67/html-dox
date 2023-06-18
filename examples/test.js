@@ -1,11 +1,14 @@
-let el = dox.querySelector('dox$mycomponent');
-
+let el = dox.querySelector('mycomponent');
 el.getDescendants().forEach((el) => {
-    el.onclick = () => {
-        if(el.id === 'child') {
-             el.$ = 'child';
-             el.inject(el.$)
+     
+    el.on('click', () => {
+        if(el.id == 'getstartedbtn'){
+           el.inject('e');
         }
-    };
-  
+    });
 });
+ 
+ 
+$export('test',  el);
+
+$import('test') // way to import
