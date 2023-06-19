@@ -1,60 +1,41 @@
-<!DOCTYPE html  >
-<html lang="en" data-theme="winter" >
+<!DOCTYPE html>
+<html lang="en" data-theme="winter">
+
 <head>
     <meta charset="UTF-8">
-    <meta config  routes="/home,/changelog,/car" fallback="/home" >
+    <meta config routes="/" fallback="/">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HTML DOX</title>
+    <meta name="title" content="HTML DOX">
+    <meta name="description"
+        content="Html dox is a html extensive markup library, built to enhance and improve how we use html! By making certain tags actually live up to their names like var!">
+    <meta name="keywords"
+        content="react,javascript,vuejs,nextjs,vercel,htmldox,visi.js,framework,ssr,csr,ssg,libraries,">
+    <meta name="robots" content="index, follow">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="language" content="English">
+    <meta name="revisit-after" content="1 days">
+    <meta name="author" content="Malik Whitten67">
     <imports>
-        
+
         ./components/app.html,
-        ./components/changelog.html,
         ./assets/daisy-full.css,
         ./assets/tailwind.js,
         ./assets/test.js
-         
-    </imports>  
-</head>
-<body>
- 
-<render position="first"
-route="/home"
->
-    <!-- this is ran first-->
-    <myComponent 
-    text="Sequential Rendering"
-    button="Get Started"
-    learnbtn="Learn More"
-    ></myComponent>
-</render>
-<render position="first"
-route="/car"
->
-    <!-- this is ran first-->
-    <car
-    text="Sequential Rendering"
-    button="Get Started"
-    learnbtn="Learn More"
-    ></car>
-</render>
- 
- 
-<render 
-route="/changelog"
-position="first"
 
->
-    <!-- this is ran last-->
-    <changelog
-     
-    ></changelog>
-</render>
+    </imports>
+</head>
+
+<body>
+
+    <render position="first" route="/">
+        <!-- this is ran first-->
+        <myComponent text="Sequential Rendering" button="Get Started"  install="Install"></myComponent>
+    </render>
+
  
-<render
-error
->
-<error></error>
-</render>
-<script src="./assets/html-dox.js" type="module"></script>
- 
+    <script src="./assets/html-dox.js" type="module"></script>
+
 </body>
+
 </html>

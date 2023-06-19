@@ -1,14 +1,16 @@
 let el = dox.querySelector('mycomponent');
-el.getDescendants().forEach((el) => {
-     
-    el.on('click', () => {
-        if(el.id == 'getstartedbtn'){
-           el.inject('e');
+
+el.getDescendants().forEach(async (el) => {
+ 
+        if(el.id === 'installbtn'){
+            el.on('click', () => {
+                window.location.href = 'https://github.com/MalikWhitten67/html-dox/releases/latest/'
+
+            })
         }
-    });
+     
+     
 });
  
  
-$export('test',  el);
-
-$import('test')
+ 
