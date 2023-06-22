@@ -1,6 +1,7 @@
 let templates = [];
 let importsTag = document.querySelector('imports')
-importsTag.style.visibility = 'hidden'
+importsTag.style.display = 'none'
+let toplevelprops = []
 // remove whitespace
 let imports = importsTag.innerHTML.replace(/\s/g, '')
 // split by comma
@@ -8,6 +9,7 @@ imports = imports.split(',')
 // remove empty strings
 imports = imports.filter(Boolean)
 
+let cache = {}
 if (document.querySelector('script') && !document.querySelector('script').getAttribute('src').includes('html-dox.js')) {
     throw new Error('html-dox.js must be the last script tag in the body')
 } else if (document.querySelector('style')) {
@@ -15,7 +17,7 @@ if (document.querySelector('script') && !document.querySelector('script').getAtt
 } else if (document.querySelector('link')) {
     throw new Error('Link tags are not supported in dox!')
 }
-document.body.style.visibility = 'hidden'
+document.body.style.display = 'none'
 let types = []
 // constraint types - for type checking
 
@@ -32,598 +34,581 @@ let contraintTypes = {
     'dox:date': Date,
 }
 // import checking // import file if type is valid
-imports.map((item) => {
+let variables = []
+let props =    sessionStorage.getItem('$dox-props') ? JSON.parse(sessionStorage.getItem('$dox-props')) : {}
+ 
 
-     
-    if (!item.endsWith('.html') && !item.endsWith('.css') && !item.endsWith('.js')) {
-        throw new Error('Unsupported imported file type!')
-    }
-    if (item.endsWith('.html')) {
-        fetch(item)
-            .then((response) => {
-                return response.text();
-            })
-            .then((data) => {
+ function setData(data, html, body, item) {
+    let importName = item.getAttribute('exports').split(',');
+    let dom = new DOMParser();
+    let dhtml = dom.parseFromString(data, 'text/html');
 
-                importsTag.innerHTML = templates;
-                parser(data);
+    dhtml.querySelectorAll('*').forEach((element) => {
+        if (element.hasAttribute('style')) {
+            let styles = element.getAttribute('style').split(';');
+            styles.forEach((style, index) => {
+                console.error(`Error in line ${index + 1} conflicting styles embedded in dox are not supported at:\n${element.innerHTML.split('<')[0]}`);
             });
-    } else if (item.endsWith('.css')) {
-        let preload = document.createElement('link')
-        preload.setAttribute('rel', 'preload')
-        preload.setAttribute('href', item)
-        preload.type = 'text/css'
-        preload.setAttribute('as', 'style')
-        let link = document.createElement('link')
-        link.setAttribute('rel', 'stylesheet')
-        link.setAttribute('href', item)
-        link.type = 'text/css'
-        document.querySelector('head').appendChild(link)
-        document.querySelector('head').appendChild(preload)
-    } else if (item.endsWith('.js')) {
-        fetch(item)
-            .then((response) => {
-                return response.text();
-            })
-            .then((data) => {
-                if (data.includes('document') && !item.includes('tailwind.js')) {
-                    throw new Error('Imported js file cannot contain document use dox instead')
-                }else if (data.includes('innerHTML') || data.includes('innerText') && !item.endsWith('tailwind.js')) {
-                    throw new Error('use dox:text  to return text and dox:$ to return html')
-                }
+        }
+    });
+
+    dhtml.querySelectorAll('*').forEach((element) => {
+        let attributes = Object.values(element.attributes);
+         
+         
+        attributes.forEach((attr) => {
+           
+           let attrValue = attr.value;
+             
+            if (attrValue.includes('{{')) {
+                let matches = attrValue.match(/{{(.*?)}}/g);
                 
-                 let func = new Function(data)
-                 func()
-            })
+                if (matches) {
+                    matches.forEach((match) => {
+                        let value = match.replace('{{', '').replace('}}', '');
+                        let prop = element.parentNode.getAttribute(value);
+                        let parent = document.querySelector(element.parentNode.tagName);
+                        if (parent && parent.getAttribute(value)) {
+                            prop = parent.getAttribute(value);
+                        }
+                        attrValue = attrValue.replace(new RegExp(`{{${value}}}`, 'g'), prop);
+                    });
+                    element.setAttribute(attr.name, attrValue);
+                }
+            }
+        });
+    });
+    
+
+    dhtml.querySelectorAll('*').forEach((element) => {
+        let matches = element.innerHTML.match(/{{(.*?)}}/g);
+       
+        if (matches) {
+            matches.forEach((match) => {
+                
+                let value =  match.split('{{')[1].split('}}')[0];
+                let el = dhtml.querySelector(element.tagName);
+                let parent = el.parentNode.tagName;
+                html.querySelectorAll('*').forEach((item) => {
+                    if (item.tagName == parent) {
+                        let prop = item.getAttribute(value);
+                        if (prop) {
+                            if (prop.toString().toLowerCase() == 'true') {
+                                prop = prop.toString().toLowerCase();
+                            }
+                            let attrValue = element.innerHTML.replace(new RegExp(`{{${value}}}`, 'g'), prop);
+                            element.innerHTML = attrValue;
+                        }
+                    }
+                });
+            });
+        }
+    });
+    
+
+    let props = {};
+
+    dhtml.querySelectorAll('[props]').forEach((item) => {
+        let name = item.tagName;
+        if (html.querySelector(name)) {
+            let $props = item.getAttribute('props').split(':');
+            $props.forEach((prop) => {
+                props[name] = $props;
+                sessionStorage.setItem('$dox-props', JSON.stringify(props));
+                if (prop == 'children') {
+                    if (html.querySelector(name).querySelector('slot')) {
+                        if (dhtml.querySelector(name).innerHTML.includes('{{children}}')) {
+                            dhtml.querySelector(name).innerHTML = dhtml.querySelector(name).innerHTML.replace('{{children}}', html.querySelector(name).querySelector('slot').innerHTML);
+                        }
+                    }
+                }
+            });
+        }
+    });
+
+    document.querySelectorAll('img, svg').forEach((item) => {
+        let src = item.getAttribute('src') || item.getAttribute('data-src');
+        let preload = document.createElement('link');
+        preload.setAttribute('rel', 'preload');
+        preload.setAttribute('href', src);
+        preload.type = 'image/*';
+        preload.setAttribute('as', 'image');
+        document.querySelector('head').appendChild(preload);
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach((entry) => {
+                if (entry.isIntersecting) {
+                    item.setAttribute('src', src);
+                    observer.unobserve(item);
+                }
+            });
+        });
+        observer.observe(item);
+    });
+
+    dhtml.querySelectorAll('var').forEach((item) => {
+        item.style.display = 'none';
+        let varName = item.getAttribute('name');
+        let varValue = item.innerHTML;
+        dhtml.querySelectorAll('*').forEach((element) => {
+            if (element.innerHTML.includes(`{{${varName}}}`)) {
+                element.innerHTML = element.innerHTML.replace(`{{${varName}}}`, varValue);
+            }
+            toplevelprops.forEach((item) => {
+                if (element.innerHTML.includes(`{{${item.name}}}`)) {
+                    element.innerHTML = element.innerHTML.replace(`{{${item.name}}}`, item.value);
+                }
+            });
+        });
+        item.remove();
+        return;
+    });
+
+    dhtml.querySelectorAll('*').forEach((element) => {
+        let exported = item.getAttribute('exports').split(',');
+        exported.forEach((exportItem) => {
+            let el = exportItem.replace(/\s/g, '');
+            importName.forEach((importItem) => {
+                if (importItem == el) {
+                    if (html.querySelector(el)) {
+                        html.querySelector(el).innerHTML = dhtml.querySelector(el).innerHTML;
+                        if (body.querySelector(el) && dhtml.querySelector(el)) {
+                            body.querySelector(el).innerHTML = dhtml.querySelector(el).innerHTML;
+                        }
+                    }
+                }
+            });
+        });
+    });
+}
+
+
+imports.map((item) => {
+    if (!item.endsWith('.html') && !item.endsWith('.css') && !item.endsWith('.js')) {
+        throw new Error('Unsupported imported file type!');
+    }
+
+    if (item.endsWith('.html')) {
+        let preload = document.createElement('link');
+        preload.setAttribute('rel', 'preload');
+        preload.setAttribute('href', item);
+        preload.type = 'text/html';
+        preload.setAttribute('as', 'document');
+        document.querySelector('head').appendChild(preload);
+
+        if (cache[item]) {
+            parser(cache[item]);
+        } else {
+            fetch(item)
+                .then((response) => {
+                    return response.text();
+                })
+                .then((data) => {
+                    cache[item] = data;
+                    parser(data);
+                });
+        }
+    } else if (item.endsWith('.css')) {
+        let preload = document.createElement('link');
+        preload.setAttribute('rel', 'preload');
+        preload.setAttribute('href', item);
+        preload.type = 'text/css';
+        preload.setAttribute('as', 'style');
+        document.querySelector('head').appendChild(preload);
+
+        let style = document.createElement('style');
+        if (!cache[item]) {
+            fetch(item)
+                .then((response) => {
+                    return response.text();
+                })
+                .then((data) => {
+                    cache[item] = data;
+                    style.innerHTML = data;
+                    document.querySelector('head').appendChild(style);
+                });
+        } else {
+            let style = document.createElement('style');
+            style.innerHTML = cache[item];
+            document.querySelector('head').appendChild(style);
+        }
+    } else if (item.endsWith('.js')) {
+        let preload = document.createElement('link');
+        preload.setAttribute('rel', 'preload');
+        preload.setAttribute('href', item);
+        preload.type = 'text/javascript';
+        preload.setAttribute('as', 'script');
+        document.querySelector('head').appendChild(preload);
+
+        if (!cache[item]) {
+            fetch(item)
+                .then((response) => {
+                    return response.text();
+                })
+                .then((data) => {
+                    if (data.includes('import ')) {
+                        throw new Error('Import statements with the "from" keyword are not allowed. Use $import instead.');
+                    } else if (data.includes('export ')) {
+                        throw new Error('Export statements are not allowed. Use $export instead.');
+                    } else if (data.includes('document') && !item.includes('tailwind.js')) {
+                        throw new Error('Imported JS file cannot contain document. Use dox instead.');
+                    } else if ((data.includes('innerHTML') || data.includes('innerText')) && !item.endsWith('tailwind.js')) {
+                        throw new Error('Use dox:text to return text and dox:$ to return HTML.');
+                    }
+
+                    let func = new Function(data);
+                    func();
+                });
+        } else {
+            let func = new Function(cache[item]);
+            func();
+        }
     }
 });
- 
+
+function reloadjsdox() {
+    imports.map((item) => {
+        if (!item.endsWith('.js')) return;
+        if (!cache[item]) {
+            fetch(item)
+                .then((response) => {
+                    return response.text();
+                })
+                .then((data) => {
+                    if (data.includes('import ')) {
+                        throw new Error('Import statements with the "from" keyword are not allowed. Use $import instead.');
+                    } else if (data.includes('export ')) {
+                        throw new Error('Export statements are not allowed. Use $export instead.');
+                    } else if (data.includes('document') && !item.includes('tailwind.js')) {
+                        throw new Error('Imported JS file cannot contain document. Use dox instead.');
+                    } else if ((data.includes('innerHTML') || data.includes('innerText')) && !item.endsWith('tailwind.js')) {
+                        throw new Error('Use dox:text to return text and dox:$ to return HTML.');
+                    }
+
+                    let func = new Function(data);
+                    func();
+                });
+        } else {
+            let func = new Function(cache[item]);
+            func();
+        }
+    })
+
+}
+
 
 const parser = (data) => {
     let dom = new DOMParser();
-    let html =  dom.parseFromString(data, 'text/html');
+    let html = dom.parseFromString(data, 'text/html');
     html = html.querySelector('html');
     let body = document.querySelector('body');
-
-
     let states = [];
+    let parsed = performance.now();
+    let finished;
+
+    let _export = html.querySelector('export');
+    if (_export) {
+        _export = _export.innerHTML.replace(/\s/g, '');
+        _export = _export.split(',');
+        _export = _export.filter(Boolean);
 
 
-    let _export = html.querySelector('export') || null;
-    let elements = [...html.querySelectorAll('*')].map((item) => item.tagName);
+        _export.forEach((item) => {
 
-    elements = elements.filter((item, index) => elements.indexOf(item) === index);
-    elements = elements.map((item) => item.toLowerCase());
-    elements = elements.filter((item) => item !== 'html' && item !== 'body' && item !== 'head' && item !== 'meta' && item !== 'div' && item !== 'function' && item !== 'render' && item !== 'type' && item !== 'subtype' && item !== 'export');
-    elements = elements.map((item) => 'html-dox$' + item);
-    // remove dom elements
-    let domelements = ['HTML', 'BODY', 'HEAD', 'META', 'FUNCTION', 'RENDER', 'TYPE', 'SUBTYPE', 'EXPORT']
-    domelements.map((item) => {
-        let index = elements.indexOf(item);
-        if (index > -1) {
-            elements.splice(index, 1);
-        }
-    })
-    let modules = html.querySelectorAll('import')
-    modules.forEach((item) => {
-        let file = item.getAttribute('src')
-        if (!file.endsWith('.html')) {
-            throw new Error('Unsupported imported file type!')
-        }
-        fetch(file)
-            .then((response) => {
-                return response.text();
-            }
-            )
-            .then((data) => {
-                let importName = item.getAttribute('exports').split(',')
-                let dom = new DOMParser();
-                let dhtml = dom.parseFromString(data, 'text/html');
-                if( dhtml.querySelector('export')){
-                    let exported = dhtml.querySelector('export').innerHTML.split(',') 
-                    
-                   exported.map((item) => {
-                     
-                      if(dhtml.querySelector(item)){
-                         // remove whitespace on import
-                        let el = item.replace(/\s/g, '')
-                        importName.map((item) => {
-                            if(item == el){
-                             
-                                if(html.querySelector(el)){
-                                    body.querySelector(el).innerHTML = dhtml.querySelector(el).innerHTML
-                                } 
-                            }
-                        })
-                      }
-                   } )
-                }
-            })
+ 
+            let template = html.querySelector(item);
+
              
-             
-    })
-    const dox = {
-        
-        querySelector: (element) => {
-            let el = element
-            let domlist = {}
-            elements = elements.filter((item, index) => elements.indexOf(item) === index);
+            let attributes = [];
 
 
-            elements = elements.map((item) => item.toLowerCase());
-            elements = elements.map((item) => {
-                let ele = item.replace('html-dox$', '')
-                return ele
-            })
 
-            // ...
+            attributes.forEach((attribute) => {
+                if (template.hasAttribute(attribute)) {
+                    if (attribute === 'typeof') {
 
-            elements.forEach((item) => {
+                        let type = types.find((type) => type.name === template.getAttribute(attribute));
 
-                const element = document.querySelector(item);
-                if (element && element.innerHTML.length > 0) {
-                    item = 'html-dox$' + item;
-                     [...element.children].map((item) => {
-                         element.$children = [...element.children]
-                         element.$children.map((item) => {
-                            item.inject = (code) => {
-                                dox.inject(code, item.tagName.toLowerCase());
-                            } ,
-                            item.querySelector = (element) => {
-                                dox.querySelector(item.tagName.toLowerCase() + ' ' + element);
+                        if (type) {
+                            let constraintType = contraintTypes[type.constraint];
+                            let value = body.querySelector(item).innerHTML;
+                            let convertedValue;
+
+                            if (type.isStrict === 'false') {
+                                return;
                             }
-                            item.querySelectorAll = (element) => {
-                                dox.querySelectorAll(item.tagName.toLowerCase() + ' ' + element);
+
+                            if (constraintType === Number) {
+                                convertedValue = Number(value);
+                                convertedValue = isNaN(convertedValue) ? 0 : convertedValue;
+                                if (convertedValue === 0) {
+                                    throw new Error(`Invalid value for type "${type.name}": ${value} (expected number)`);
+                                }
+                            } else if (constraintType === Boolean) {
+                                if (value.toLowerCase() === 'true') {
+                                    convertedValue = true;
+                                } else if (value.toLowerCase() === 'false') {
+                                    convertedValue = false;
+                                } else {
+                                    throw new Error(`Invalid value for type "${type.name}": ${value} (expected boolean)`);
+                                }
+                            } else if (constraintType === String) {
+                                convertedValue = value;
+                            } else {
+                                throw new Error(`Invalid constraint type for type "${type.name}": ${type.constraint}`);
                             }
-                            item.$children = [...item.children]
-                         })
-                         
-                     })
-                   
-                    domlist[item] = element;
-                     
-                 
-                   
+                        } else {
+                            throw new Error(`Type "${template.getAttribute(attribute)}" does not exist`);
+                        }
+                    }
                 }
             });
-            let supported_queries = ['html-dox$', 'dox$']
 
-            let query = supported_queries.find((item) => el.includes(item));
-          
-            if (!query) {
-                throw new Error('Unsupported query');
-            }
-
-            if (query == 'dox$') {
-                el = el.replace('dox$', 'html-dox$');
-            }
-            if (!domlist[el]) {
-                throw new Error(`Element "${el}" does not exist`);
-
-            }
-           
-
-
-            return {
-                dom: domlist[el],
-                outerHTML: domlist[el].outerHTML,
-                outerText: domlist[el].outerText,
-                style: domlist[el].style,
-                classList: domlist[el].classList,
-                attributes: domlist[el].attributes,
-                children: domlist[el].children,
-                childNodes: domlist[el].childNodes,
-                firstChild: domlist[el].firstChild,
-                lastChild: domlist[el].lastChild,
-                nextSibling: domlist[el].nextSibling,
-                previousSibling: domlist[el].previousSibling,
-                parentNode: domlist[el].parentNode,
-                inject: (code) => {
-                    el = el.replace('html-dox$', '')
-                    dox.inject(code, el);
-                },
-                getDescendants: () => {
-                    const descendants = [];
+             
+            if (html.querySelector(item).hasAttribute('props')) {
+                let $props = html.querySelector(item).getAttribute('props').split(':');
+               
+                $props.forEach((prop) => {
+                   
                   
-                    const traverse = (node) => {
-                      descendants.push(node);
-                  
-                      const children = node.children;
-                      for (let i = 0; i < children.length; i++) {
-                        children[i].inject = (code) => {
-                          dox.inject(code, children[i].tagName.toLowerCase());
-                        };
-                        children[i].text = children[i].innerHTML.replace(/\s/g, '');
-                        children[i].$ = children[i].innerHTML;
-                        children[i].querySelector = (element) => {
-                          return dox.querySelector(children[i].tagName.toLowerCase() + ' ' + element);
-                        };
-                        children[i].querySelectorAll = (element) => {
-                          return dox.querySelectorAll(children[i].tagName.toLowerCase() + ' ' + element);
-                        };
-                  
-                        const grandchildren = children[i].children;
-                        for (let j = 0; j < grandchildren.length; j++) {
-                          grandchildren[j].inject = (code) => {
-                            dox.inject(code, grandchildren[j].tagName.toLowerCase());
-                          };
-                           //remove whitespace but keep spaces
+                    props[item] = $props
+                    sessionStorage.setItem('$dox-props', JSON.stringify(props))
+                    
+                    let derivatives = template.querySelectorAll('[derive]');
+                    derivatives.forEach((subitem) => {
+                        let attr = subitem.getAttribute('derive');
+                        let derivedvalue = body.querySelector(item).getAttribute(attr);
 
-                          grandchildren[j].text =   grandchildren[j].innerText;
-                          grandchildren[j].$ = grandchildren[j].innerHTML;
-                          grandchildren[j].querySelector = (element) => {
-                            return dox.querySelector(
-                              grandchildren[j].tagName.toLowerCase() + ' ' + element
-                            );
-                          };
-                          grandchildren[j].querySelectorAll = (element) => {
-                            return dox.querySelectorAll(
-                              grandchildren[j].tagName.toLowerCase() + ' ' + element
-                            );
-                          };
-                  
-                          // Recursively traverse the descendants
-                          traverse(grandchildren[j]);
+                        if (subitem.innerHTML.includes(`{{${attr}}}`)) {
+                            subitem.innerHTML = subitem.innerHTML.replace(`{{${attr}}}`, derivedvalue);
                         }
-                      }
-                    };
-                  
-                    traverse(domlist[el]);
-                    return descendants;
-                  },
-                  
-                querySelector: (element) => {
-                    el = el.replace('html-dox$', '')
-                    dox.querySelector(el + ' ' + element);
-                },
-                onclick: (callback) => {
-
-                    domlist[el].addEventListener('click', callback)
-                },
-                onhover: (callback) => {
-                    domlist[el].addEventListener('mouseover', callback)
-                },
-                onmouseout: (callback) => {
-                    domlist[el].addEventListener('mouseout', callback)
-                },
-                onfocus: (callback) => {
-                    domlist[el].addEventListener('focus', callback)
-                },
-                Animation: (animation) => {
-                    domlist[el].style.animation = animation
-                },
-                AnimationEffect: (effect) => {
-                    domlist[el].style.animationEffect = effect
-                },
-                AnimationDelay: (delay) => {
-                    domlist[el].style.animationDelay = delay
-                },
-                AnimationDirection: (direction) => {
-                    domlist[el].style.animationDirection = direction
-                },
-                
-                getChildren: () => {
-                    return domlist[el].$children
-                },
-
-
-                setState: (name, value) => {
-                    states.map((item) => {
-                      if (item.name === name) {
-                        item.value = value;
-                      }
                     });
-                  },
-                getState: (name) => {
-                    states.map((item) => {
-                        if (item.name === name) {
-                            return item.value;
+   
+                    let propElements = template.innerHTML.split('{{');
+                    
+                    propElements.forEach((element) => {
+                        let prop = element.split('}}')[0];
+                       
+                        if (template.innerHTML.includes(`{{${prop}}}`)) {
+                            template.innerHTML = template.innerHTML.replace(`{{${prop}}}`, body.querySelector(item).getAttribute(prop));
                         }
+
+                    })
+                    if (template.innerHTML.includes(`{{${prop}}}`)) {
+                         
+                        // replace {{prop}} with the value of the prop
+                        template.innerHTML = template.innerHTML.replace(`{{${prop}}}`, body.querySelector(item).getAttribute(prop));
                     }
-                    )
-                },
+                });
             }
 
-
-        },
-        querySelectorAll: (element) => {
-            let el = element
-            let domlist = {}
-            elements = elements.filter((item, index) => elements.indexOf(item) === index);
-
-            elements = elements.map((item) => item.toLowerCase());
-            elements.map((item) => {
-                let ele = item.replace('html-dox$', '')
-                domlist[item] = document.querySelector(ele);
+            templates.push({
+                name: template.tagName,
+                template: template.innerHTML,
+            });
 
 
-            })
-            let supported_queries = ['html-dox$', 'dox$']
+            let element = body.querySelector(item);
 
-            let query = supported_queries.find((item) => el.includes(item));
-            if (!query) {
-                throw new Error('Unsupported query');
-            }
-
-            if (query == 'dox$') {
-                el = el.replace('dox$', 'html-dox$');
-            }
-            if (!domlist[el]) {
-                throw new Error(`Element "${el}" does not exist`);
-
-            }
-            return {
-                dom: domlist[el],
-                text: domlist[el].innerHTML,
-                outerHTML: domlist[el].outerHTML,
-                outerText: domlist[el].outerText,
-                style: domlist[el].style,
-                classList: domlist[el].classList,
-                attributes: domlist[el].attributes,
-                children: domlist[el].children,
-                childNodes: domlist[el].childNodes,
-                firstChild: domlist[el].firstChild,
-                lastChild: domlist[el].lastChild,
-                nextSibling: domlist[el].nextSibling,
-                previousSibling: domlist[el].previousSibling,
-                parentNode: domlist[el].parentNode,
-                inject: (code) => {
-                    el = el.replace('html-dox$', '')
-                    dox.inject(code, el);
-                },
-                querySelector: (element) => {
-                    el = el.replace('html-dox$', '')
-                    dox.querySelector(el + ' ' + element);
-                },
-                forEach: (callback) => {
-                    domlist[el].forEach((item) => {
-                        callback(item);
-                    })
-                },
-                getDescendants: () => {
-                    const descendants = [];
-            
-                    const traverse = (node) => {
-                      descendants.push(node);
-            
-                      const children = node.children;
-                      for (let i = 0; i < children.length; i++) {
-                        traverse(children[i]);
-                      }
-                    };
-            
-                    traverse(domlist[el]);
-                    return  {
-                        forEach: (callback) => {
-                            descendants.forEach((item) => {
-                                callback(item);
-                                return {
-                                    querySelector: (element) => {
-                                        descendants.map((item) => {
-                                             dox.querySelector(item.tagName.toLowerCase() + ' ' + element);
-                                        })
-                                    },
-                                    querySelectorAll: (element) => {
-                                        descendants.map((item) => {
-                                            dox.querySelectorAll(item.tagName.toLowerCase() + ' ' + element);
-                                        })
-                                    },
-                                    setState: (name, value) => {
-                                        states.map((item) => {
-                                          if (item.name === name) {
-                                            item.value = value;
-                                          }
-                                        });
-                                      },
-                                    getState: (name) => {
-                                        states.map((item) => {
-                                            if (item.name === name) {
-                                                return item.value;
-                                            }
-                                        }
-                                        )
-                                    },
-                                }
-                            })
-                        },
-                        map: (callback) => {
-                            descendants.map((item) => {
-                                callback(item);
-                            })
-                        },
-                        
+            element.innerHTML = template.innerHTML;
+  
+            function rerender(blocked) {
 
 
-                    }
-                  },
-                map: (callback) => {
-                    domlist[el].map((item) => {
-                        callback(item);
-                    })
-                },
-                filter: (callback) => {
-                    domlist[el].filter((item) => {
-                        callback(item);
-                    })
-                },
-                reduce: (callback) => {
-                    domlist[el].reduce((item) => {
-                        callback(item);
-                    })
-                },
-                reduceRight: (callback) => {
-                    domlist[el].reduceRight((item) => {
-                        callback(item);
-                    })
-                },
-                every: (callback) => {
-                    domlist[el].every((item) => {
-                        callback(item);
-                    })
-                },
-                some: (callback) => {
-                    domlist[el].some((item) => {
-                        callback(item);
-                    })
-                },
-                useState: (initialValue) => {
-                    let state = initialValue;
-                    return [
-                        state,
-                        (newState) => {
-                            state = newState;
-                            watchState(state);
+                if (element) {
+
+                    document.querySelector(element.tagName).innerHTML = element.innerHTML;
+                    let modules = html.querySelectorAll('import')
+
+                    modules.forEach((item) => {
+                        let file = item.getAttribute('src');
+
+                        if (!file.endsWith('.html')) {
+                            throw new Error('Unsupported imported file type!');
                         }
-                    ];
-                },
-                watchState: (state, callback) => {
-                    return (newState) => {
-                        state = newState;
-                        callback(state);
-                    };
-                },
 
-                setState: (name, value) => {
-                    states.map((item) => {
-                        if (item.name === name) {
-                            item.value = value;
-                        }
-                    })
-                },
-                onclick: (callback) => {
-                    domlist[el].onclick = callback
-                },
-                getState: (name) => {
-                    states.map((item) => {
-                        if (item.name === name) {
-                            return item.value;
-                        }
-                    }
-                    )
-                },
-            }
+                        if (!window[file]) {
 
-        },
-        inject: (code, element) => {
-            // remove html-dox$ from element
-            elements = elements.map((item) => 'html-dox$' + item);
-            elements = element.replace('html-dox$', '')
-            elements = elements.toLowerCase();
-            // check if element exists in elements
-            if (elements.includes(elements)) {
-                document.querySelector(element).innerHTML = code;
-            }
-        },
-        state: (name, value) => {
-            states.push({
-                name: name,
-                value: value
-            })
-        },
-        setState: (name, value) => {
-            states.map((item) => {
-                if (item.name === name) {
-                    item.value = value;
+
+                            fetch(file)
+                                .then((response) => {
+                                    return response.text();
+                                })
+                                .then((data) => {
+
+                                    window[file] = data
+                                    setData(data, html, body, item)
+                                })
+                            return;
+
+                        } else {
+
+                            setData(window[file], html, body, item)
+                        }
+
+                    });
                 }
-            })
-        },
-        getState: (name) => {
-            states.map((item) => {
-                if (item.name === name) {
-                    return item.value;
+                
+            }
+
+
+
+
+            let routes = document.querySelector('meta[config]')
+            let root = routes.getAttribute('fallback')
+
+
+            let _routes = {}
+            if (routes) {
+                routes = routes.getAttribute('routes')
+                routes = routes.split(',')
+                routes.forEach((item) => {
+                    _routes[`#${item}`] = `#${item}`
                 }
-            })
-        },
+                )
 
-
-    }
-    window.dox = dox;
-    //  dox functions
-
-    let _var = html.querySelectorAll('var');
-    let bodyvar = body.querySelectorAll('var');
-
-    _var.forEach((item) => {
-        let name = item.getAttribute('name');
-        let value = item.getAttribute('value');
-        if (!name) {
-            throw new Error('Variable name is required!');
-        }
-        if (!value) {
-            throw new Error('Variable value is required!');
-        }
-        if (name && value) {
-            window[name] = value;
-        }
-    })
-    bodyvar.forEach((item) => {
-        let name = item.getAttribute('name');
-        let value = item.getAttribute('value');
-        if (!name) {
-            throw new Error('Variable name is required!');
-        }
-        if (!value) {
-            throw new Error('Variable value is required!');
-        }
-        if (name && value) {
-            window[name] = value;
-        }
-    })
-    html.querySelectorAll('[usevar]').forEach((item) => {
-        if (item.innerHTML.includes('{{')) {
-            let value = item.innerHTML.split('{{')[1].split('}}')[0];
-
-            item.innerHTML = window[value];
-        }
-    })
-
-
-    window.dox = dox;
-    function useState(initialValue) {
-        let state = initialValue;
-        return [
-            state,
-            (newState) => {
-                state = newState;
-                watchState(state);
             }
-        ];
-    }
-
-    function watchState(state, callback) {
-        return (newState) => {
-            state = newState;
-            callback(state);
-        };
-    }
-
-    window.watchState = watchState;
-    window.useState = useState;
-    window.setState = dox.setState;
-
-    let events = {
-        click: (element, callback = () => { }) => {
-            let domlist = {}
-            elements.map((item) => {
-                item = item.toLowerCase();
-                domlist[item] = document.querySelector(item);
-                // lowercase
-            })
+            root = '#' + root
 
 
-            if (!domlist[element]) {
-                throw new Error(`Element "${element}" does not exist`);
+
+
+ 
+
+            function showRender(elemente) {
+                let rendered = false;
+
+                finished = performance.now() - parsed;
+
+                if (!_routes[window.location.hash]) {
+                    window.location.hash = root;
+                }
+                if (element && !elemente) {
+                    rerender()
+                    let parent = element ? element.parentNode : null;
+                    let template = html.querySelector(item);
+                    _routes[window.location.hash] = template.innerHTML;
+
+                    if (parent && parent.hasAttribute('route') || parent.hasAttribute('overide')) {
+                        let attributePos = parent.getAttribute('route');
+                        let position = parent.getAttribute('position');
+                        if (attributePos && position === 'first') {
+                            renderElement(element, template, 'first', parent.getAttribute('route'));
+                        } else if (attributePos && position === 'last') {
+                            renderElement(element, template, 'last', parent.getAttribute('route'));
+                        }
+                    } else {
+
+                        let el = document.createElement('div');
+                        el.style = 'position:fixed;top:0;left:0;right:0;bottom:0;background:white;z-index:9999; font-family: sans-serif; font-size: 30px;'
+                        el.innerHTML = `<h1 style="text-align:center;margin-top:50vh">Route is blocked!</h1>`
+                        element.innerHTML = el.outerHTML
+                    }
+                }else{
+                    let el = document.querySelector(elemente)
+                    let parent = el ? el.parentNode : null;
+                    let template = html.querySelector(item);
+                    _routes[window.location.hash] = template.innerHTML;
+                    if(parent && parent.hasAttribute('route') || parent.hasAttribute('overide')){
+                        let attributePos = parent.getAttribute('route');
+                        let position = parent.getAttribute('position');
+                        el.innerHTML = ''
+                        if (attributePos && position === 'first') {
+                            renderElement(el, template, 'first', parent.getAttribute('route'));
+                        } else if (attributePos && position === 'last') {
+                            renderElement(el, template, 'last', parent.getAttribute('route'));
+                        }
+
+                    }else{
+                        let el = document.createElement('div');
+                        el.style = 'position:fixed;top:0;left:0;right:0;bottom:0;background:white;z-index:9999; font-family: sans-serif; font-size: 30px;'
+                        el.innerHTML = `<h1 style="text-align:center;margin-top:50vh">Route is blocked!</h1>`
+                        element.innerHTML = el.outerHTML
+                    }    
+                }
+
+                function renderElement(target, template, position, route) {
+                    _routes[route] = template.innerHTML;
+                    route = '#' + route;
+                    let errored;
+                    !route ? errored = true : errored = false;
+
+
+
+                    target.querySelectorAll('*').forEach((element) => {
+                        if (element.hasAttribute('route')) {
+                            element.innerHTML = '';
+                        }
+                    });
+
+                    if (route === window.location.hash && !errored) {
+                        element.innerHTML = template.innerHTML;
+                        return;
+                    } else {
+                        element.innerHTML = '';
+                    }
+                }
+
+
+
             }
 
-            console.log(domlist)
+            if (!_routes[window.location.hash]) {
+                window.location.hash = root;
+            }
+
+            showRender();
+
+            window.addEventListener('hashchange', () => {
+                document.querySelector('html').setAttribute('root', window.location.hash.split('#')[1]);
+                showRender();
+                reloadjsdox()
+                rerender()
 
 
-            callback();
-        }
+            });
+
+            
+
+
+        });
     }
 
+    // lazy load images
+     
+    
 
-    // type checking
+
+  
+
+    window.$import = (data) => {
+        if (data.endsWith('.js')) {
+            fetch(file)
+                .then((response) => {
+                    return response.text();
+                })
+                .then((data) => {
+                    if (data.includes('import ')) {
+                        throw new Error('Import statements with the "from" keyword are not allowed. Use $import instead.');
+                    } else if (data.includes('export ')) {
+                        throw new Error('Export statements are not allowed. Use $export instead.');
+                    } else
+                        if (data.includes('document') && !item.includes('tailwind.js')) {
+                            throw new Error('Imported js file cannot contain document use dox instead')
+                        } else if (data.includes('innerHTML') || data.includes('innerText') && !item.endsWith('tailwind.js')) {
+                            throw new Error('use dox:text  to return text and dox:$ to return html')
+                        }
+
+                    let func = new Function(data)
+                    func()
+                })
+        } else {
+            return window[data]
+        }
+    }
+    window.$export = (name, value) => {
+        window[name] = value
+    }
+    
 
     body.querySelectorAll('type').forEach((item) => {
         let subtypes = item.querySelectorAll('subtype');
@@ -698,7 +683,7 @@ const parser = (data) => {
         });
     });
     html.querySelectorAll('type').forEach((item) => {
-       
+
         // Check if 2 subtypes have the same name
         let subtypes = item.querySelectorAll('subtype');
         let names = [];
@@ -746,7 +731,7 @@ const parser = (data) => {
 
                     if (subtype && strict) {
                         let constraintType = contraintTypes[subtype.constraint];
-                       
+
                         let convertedValue;
 
                         if (constraintType === Number) {
@@ -779,134 +764,389 @@ const parser = (data) => {
     });
 
 
-    // exported code splitting
 
-    _export = _export.innerHTML.replace(/\s/g, '');
-    _export = _export.split(',');
-    _export = _export.filter(Boolean);
-  
-    let positions = new Set();
+
+
     
-    _export.forEach((item) => {
-      let template = html.querySelector(item);
-      let attributes = Array.from(template.attributes).map((attr) => attr.name);
-    
-      attributes.forEach((attribute) => {
-        if (template.hasAttribute(attribute)) {
-          if (attribute === 'typeof') {
-           
-            let type = types.find((type) => type.name === template.getAttribute(attribute));
-    
-            if (type) {
-              let constraintType = contraintTypes[type.constraint];
-              let value = body.querySelector(item).innerHTML;
-              let convertedValue;
-    
-              if (type.isStrict === 'false') {
-                return;
-              }
-    
-              if (constraintType === Number) {
-                convertedValue = Number(value);
-                convertedValue = isNaN(convertedValue) ? 0 : convertedValue;
-                if (convertedValue === 0) {
-                  throw new Error(`Invalid value for type "${type.name}": ${value} (expected number)`);
-                }
-              } else if (constraintType === Boolean) {
-                if (value.toLowerCase() === 'true') {
-                  convertedValue = true;
-                } else if (value.toLowerCase() === 'false') {
-                  convertedValue = false;
-                } else {
-                  throw new Error(`Invalid value for type "${type.name}": ${value} (expected boolean)`);
-                }
-              } else if (constraintType === String) {
-                convertedValue = value;
-              } else {
-                throw new Error(`Invalid constraint type for type "${type.name}": ${type.constraint}`);
-              }
-            } else {
-              throw new Error(`Type "${template.getAttribute(attribute)}" does not exist`);
-            }
-          }
-        }
-      });
-    
-      if (template.getAttribute('props')) {
-        let props = template.getAttribute('props').split(':');
-        props.forEach((prop) => {
-          let derivatives = template.querySelectorAll('[derive]');
-          derivatives.forEach((subitem) => {
-            let attr = subitem.getAttribute('derive');
-            let derivedvalue = body.querySelector(item).getAttribute(attr);
-          
-            if (subitem.innerHTML.includes(`{{${attr}}}`)) {
-              subitem.innerHTML = subitem.innerHTML.replace(`{{${attr}}}`, derivedvalue);
-            }
-          });
-    
-          if (template.innerHTML.includes(`{{${prop}}}`)) {
-            // replace {{prop}} with the value of the prop
-            template.innerHTML = template.innerHTML.replace(`{{${prop}}}`, body.querySelector(item).getAttribute(prop));
-          }
-        });
-      }
-    
-      templates.push({
-        name: template.tagName,
-        template: template.innerHTML,
-      });
-    
-      let element = body.querySelector(item);
-      if (element) {
-        let parent = element.parentNode;
-        if (parent.tagName === 'RENDER') {
-          positions.add(parent);
-          let execTime = parent.getAttribute('execTime');
-          if (execTime === 'before') {
-            positions.forEach((position) => {
-              let siblingElement = body.querySelector(`[position="${position}"]`);
-              if (siblingElement !== null && siblingElement !== element) {
-                siblingElement.style.display = 'none';
-              }
-            });
-            renderElement(element, template, 'first');
-          } else if (execTime === 'after') {
-            renderElement(element, template, 'last');
-            positions.forEach((position) => {
-              let siblingElement = body.querySelector(`[position="${position}"]`);
-              if (siblingElement !== null && siblingElement !== element) {
-                siblingElement.style.display = 'none';
-              }
-            });
-          }
-    
-          let attributePos = parent.hasAttribute('position');
-          let position = parent.getAttribute('position');
-          if (attributePos && position === 'first') {
-            renderElement(element, template, 'first');
-          } else if (attributePos && position === 'last') {
-            renderElement(element, template, 'last');
-          }
-        } else {
-          throw new Error('The element must be inside a render tag');
-        }
-      }
-    });
-    
-    function renderElement(target, template, position) {
-      if (position === 'first') {
-        target.innerHTML = template.innerHTML + target.innerHTML;
-      } else if (position === 'last') {
-        target.innerHTML = target.innerHTML + template.innerHTML;
-      }
-    }
-    
-};
+
+}
+
 
 
 document.addEventListener('DOMContentLoaded', () => {
-   setTimeout(() => {
-    document.body.style.visibility = 'visible'
-    }, 200)
+    setTimeout(() => {
+        document.body.style.display = 'block'
+        
+    }, 150)
+    
 })
+ 
+let dox = {
+    currentRoute: () => {
+        return window.location.hash.split('#')[1];
+    },
+    rendered: (callback = () => { }) => {
+        document.querySelectorAll('*').forEach((element) => {
+            
+          
+
+            if (element.parentNode.tagName == 'RENDER' && element.innerHTML.length > 0
+            ) {
+                
+                callback({
+                    name: element.tagName,
+                    props:    JSON.parse(sessionStorage.getItem('$dox-props'))[element.tagName],
+                     
+                    
+                    html: element.innerHTML,
+                    rendered: finished + 'ms'
+
+                })
+
+            }
+        })
+
+    },
+
+    querySelector: (selector) => {
+        let el = document.querySelector(selector) || html.querySelector(selector);
+
+        if (el) {
+            let methods = {
+                getDescendants: () => {
+                    let descendants = [];
+                    let traverse = (el) => {
+
+                        let children = el.children;
+                        for (let i = 0; i < children.length; i++) {
+                            descendants.push(children[i]);
+                            traverse(children[i]);
+                        }
+                    }
+                    traverse(el);
+
+                    return {
+                        forEach: (callback) => {
+                            descendants.forEach((item) => {
+                                callback({
+                                    id: item.id,
+                                    class: item.className,
+                                    text: item.innerText,
+                                    setHtml: (value) => {
+                                        item.innerHTML = value;
+                                    },
+                                    getItem: (name) => {
+                                        return item.querySelector(`#${name}`);
+                                    },
+                                    getHtml: () => {
+                                        return item.innerHTML;
+                                    },
+                                    getChildren: () => {
+                                        let children = [];
+                                        item.querySelectorAll('*').forEach((item) => {
+                                            if (item.parentNode === el) {
+                                                children.push(item);
+                                            }
+                                        });
+                                        return children;
+                                    },
+                                    getAncestors: () => {
+                                        let ancestors = [];
+                                        let parent = item.parentNode;
+                                        while (parent) {
+                                            ancestors.push(parent);
+                                            parent = parent.parentNode;
+                                        }
+                                        return ancestors;
+                                    },
+                                    props: () => {
+                                        return props[item.tagName]
+                                    },
+                                    querySelector: (selector) => {
+                                        descendants = descendants.filter((item) => {
+                                            return item.matches(selector);
+                                        });
+                                        return descendants;
+                                    },
+                                    fadeIn: (time) => {
+                                        item.style.opacity = 0;
+                                        item.style.transition = `opacity ${time}s`;
+                                        item.style.opacity = 1;
+                                    },
+                                    fadeOut: (time) => {
+                                        item.style.opacity = 1;
+                                        item.style.transition = `opacity ${time}s`;
+                                        item.style.opacity = 0;
+                                    },
+
+                                    on: (event, callback) => {
+                                        item.addEventListener(event, callback);
+                                    },
+                                    inject: (code) => {
+                                        item.innerHTML = code;
+
+                                    },
+                                    state: (name) => {
+                                        let state = states.find((state) => state.name === name);
+                                        if (state) {
+                                            return state.value;
+                                        } else {
+                                            throw new Error(`State "${name}" does not exist`);
+                                        }
+                                    },
+                                    setState: (name, value) => {
+                                        let state = states.find((state) => state.name === name);
+                                        if (state) {
+                                            state.value = value;
+                                        } else {
+                                            states.push({
+                                                name,
+                                                value
+                                            });
+                                        }
+                                    }
+                                    ,
+                                    watch: (name, callback) => {
+                                        let state = states.find((state) => state.name === name);
+                                        if (state) {
+                                            callback(state.value);
+                                        } else {
+                                            throw new Error(`State "${name}" does not exist`);
+                                        }
+                                    }
+
+                                });
+                            });
+
+                        },
+                        map: (callback) => {
+                            let mapped = [];
+                            descendants.forEach((item) => {
+                                mapped.push(callback(item));
+                            });
+                            return mapped;
+                        },
+                        querySelector: (selector) => { dox.querySelector(selector) },
+                        querySelectorAll: (selector) => {
+                            descendants = descendants.filter((item) => {
+                                return item.matches(selector);
+                            });
+                            return descendants;
+                        },
+                        inject: (target, code) => {
+                            let targetEl = document.querySelector(target);
+                            if (targetEl) {
+                                targetEl.innerHTML = code;
+                            }
+                        },
+                        html: () => {
+                            let html = '';
+                            descendants.forEach((item) => {
+                                html += item.outerHTML;
+                            });
+                            return html;
+                        },
+                        getAncestors: () => {
+                            let ancestors = [];
+                            let parent = el.parentNode;
+                            while (parent) {
+                                ancestors.push(parent);
+                                parent = parent.parentNode;
+                            }
+                            return ancestors;
+                        }
+                    }
+                },
+               attr: (name, value) => {
+                    if(value)
+                    el.setAttribute(name, value);
+                    else{
+                        return el.getAttribute(name)
+                    }
+                },
+                replaceType: (tagName) => {
+                    let newel = document.createElement(tagName);
+                    newel.innerHTML = el.innerHTML;
+                    let att = Object.values(el.attributes);
+                    att.forEach((item) => {
+                        newel.setAttribute(item.name, item.value);
+                    });
+                    el.classList.forEach((item) => {
+                        newel.classList.add(item);
+                    });
+                    el.parentNode.replaceChild(newel, el);
+
+                },
+               
+                props: JSON.parse(sessionStorage.getItem('$dox-props'))[el.tagName],
+                 
+                inject: (target, code) => {
+                    let targetEl = document.querySelector(target);
+                    if (targetEl) {
+                        targetEl.innerHTML = code;
+                    }
+                },
+                getAncestors: () => {
+                    let ancestors = [];
+                    let parent = el.parentNode;
+                    while (parent) {
+                        ancestors.push(parent);
+                        parent = parent.parentNode;
+                    }
+                    return ancestors;
+                },
+                text: el.innerText,
+                html: el.innerHTML,
+                getChildren: () => {
+                    let children = [];
+                    el.querySelectorAll('*').forEach((item) => {
+                        if (item.parentNode === el) {
+                            children.push(item);
+                        }
+                    });
+                    return children;
+                }
+
+            }
+            return methods;
+        } else {
+            return null;
+        }
+    },
+    querySelectorAll: (selector) => {
+        let els = document.querySelectorAll(selector) || html.querySelectorAll(selector);
+        if (els) {
+            let methods = {
+                forEach: (callback) => {
+
+                    els.forEach((item) => {
+                        callback({
+                            id: item.id,
+                            class: item.className,
+                            text: item.innerText,
+                            html: item.innerHTML,
+                            getChildren: () => {
+                                let children = [];
+                                item.querySelectorAll('*').forEach((item) => {
+                                    if (item.parentNode === el) {
+                                        children.push(item);
+                                    }
+                                });
+                                return children;
+                            },
+                            getAncestors: () => {
+                                let ancestors = [];
+                                let parent = item.parentNode;
+                                while (parent) {
+                                    ancestors.push(parent);
+                                    parent = parent.parentNode;
+                                }
+                                return ancestors;
+                            },
+                            querySelector: (selector) => {
+                                els = els.filter((item) => {
+                                    return item.matches(selector);
+                                });
+                                return els;
+                            },
+                            fadeIn: (time) => {
+                                item.style.opacity = 0;
+                                item.style.transition = `opacity ${time}s`;
+                                item.style.opacity = 1;
+                            },
+                            fadeOut: (time) => {
+                                item.style.opacity = 1;
+                                item.style.transition = `opacity ${time}s`;
+                                item.style.opacity = 0;
+                            },
+
+                            on: (event, callback) => {
+                                item.addEventListener(event, callback);
+                            },
+                            inject: (code) => {
+                                item.innerHTML = code;
+                            },
+                            state: (name) => {
+                                let state = states.find((state) => state.name === name);
+                                if (state) {
+                                    return state.value;
+                                } else {
+                                    throw new Error(`State "${name}" does not exist`);
+                                }
+                            },
+                            setState: (name, value) => {
+                                let state = states.find((state) => state.name === name);
+                                if (state) {
+                                    state.value = value;
+                                } else {
+                                    states.push({
+                                        name,
+                                        value
+                                    });
+                                }
+                            }
+                            ,
+                            watch: (name, callback) => {
+                                let state = states.find((state) => state.name === name);
+                                if (state) {
+                                    callback(state.value);
+                                } else {
+                                    throw new Error(`State "${name}" does not exist`);
+                                }
+                            }
+
+                        });
+                    });
+                }
+                ,
+                map: (callback) => {
+                    let mapped = [];
+                    els.forEach((item) => {
+                        mapped.push(callback(item));
+                    });
+                    return mapped;
+                },
+                querySelector: (selector) => { dox.querySelector(selector) },
+                querySelectorAll: (selector) => {
+                    els = els.filter((item) => {
+                        return item.matches(selector);
+                    });
+                    return els;
+                },
+                inject: (target, code) => {
+                    let targetEl = document.querySelector(target);
+                    if (targetEl) {
+                        targetEl.innerHTML = code;
+                    }
+                }
+                ,
+
+                getAncestors: () => {
+                    let ancestors = [];
+                    let parent = el.parentNode;
+                    while (parent) {
+                        ancestors.push(parent);
+                        parent = parent.parentNode;
+                    }
+                    return ancestors;
+                },
+                text: el.innerText,
+                html: el.innerHTML,
+                getChildren: () => {
+                    let children = [];
+                    el.querySelectorAll('*').forEach((item) => {
+                        if (item.parentNode === el) {
+                            children.push(item);
+                        }
+                    });
+                    return children;
+                }
+            }
+            return methods;
+        } else {
+            return null;
+        }
+    },
+
+}
+window.dox = dox;
