@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <meta config routes="/" fallback="/">
+</head>
+<body>
+    <imports>
+        ./pages/main.html,
+        ./ui/tailwind.js,
+        ./ui/daisy-full.css,
+        ./pages/todo.js
+    </imports>
+    <render route="/">
+        <todo></todo>
+    </render>
+    <script src="./html-dox.js"></script>
+</body>
+</html>
