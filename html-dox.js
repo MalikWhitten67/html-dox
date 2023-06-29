@@ -35,116 +35,18 @@ let contraintTypes = {
 }
 // import checking // import file if type is valid
 let variables = []
-let props =    sessionStorage.getItem('$dox-props') ? JSON.parse(sessionStorage.getItem('$dox-props')) : {}
- 
+let props = sessionStorage.getItem('$dox-props') ? JSON.parse(sessionStorage.getItem('$dox-props')) : {}
 
- function setData(data, html, body, item) {
+
+function setData(data, html, body, item) {
     let importName = item.getAttribute('exports').split(',');
     let dom = new DOMParser();
     let dhtml = dom.parseFromString(data, 'text/html');
 
-    dhtml.querySelectorAll('*').forEach((element) => {
-        if (element.hasAttribute('style')) {
-            let styles = element.getAttribute('style').split(';');
-            styles.forEach((style, index) => {
-                console.error(`Error in line ${index + 1} conflicting styles embedded in dox are not supported at:\n${element.innerHTML.split('<')[0]}`);
-            });
-        }
-    });
-
-    dhtml.querySelectorAll('*').forEach((element) => {
-        let attributes = Object.values(element.attributes);
-         
-         
-        attributes.forEach((attr) => {
-           
-           let attrValue = attr.value;
-             
-            if (attrValue.includes('{{')) {
-                let matches = attrValue.match(/{{(.*?)}}/g);
-                
-                if (matches) {
-                    matches.forEach((match) => {
-                        let value = match.replace('{{', '').replace('}}', '');
-                        let prop = element.parentNode.getAttribute(value);
-                        let parent = document.querySelector(element.parentNode.tagName);
-                        if (parent && parent.getAttribute(value)) {
-                            prop = parent.getAttribute(value);
-                        }
-                        attrValue = attrValue.replace(new RegExp(`{{${value}}}`, 'g'), prop);
-                    });
-                    element.setAttribute(attr.name, attrValue);
-                }
-            }
-        });
-    });
-    
-
-    dhtml.querySelectorAll('*').forEach((element) => {
-        let matches = element.innerHTML.match(/{{(.*?)}}/g);
-       
-        if (matches) {
-            matches.forEach((match) => {
-                
-                let value =  match.split('{{')[1].split('}}')[0];
-                let el = dhtml.querySelector(element.tagName);
-                let parent = el.parentNode.tagName;
-                html.querySelectorAll('*').forEach((item) => {
-                    if (item.tagName == parent) {
-                        let prop = item.getAttribute(value);
-                        if (prop) {
-                            if (prop.toString().toLowerCase() == 'true') {
-                                prop = prop.toString().toLowerCase();
-                            }
-                            let attrValue = element.innerHTML.replace(new RegExp(`{{${value}}}`, 'g'), prop);
-                            element.innerHTML = attrValue;
-                        }
-                    }
-                });
-            });
-        }
-    });
-    
+ 
 
     let props = {};
-
-    dhtml.querySelectorAll('[props]').forEach((item) => {
-        let name = item.tagName;
-        if (html.querySelector(name)) {
-            let $props = item.getAttribute('props').split(':');
-            $props.forEach((prop) => {
-                props[name] = $props;
-                sessionStorage.setItem('$dox-props', JSON.stringify(props));
-                if (prop == 'children') {
-                    if (html.querySelector(name).querySelector('slot')) {
-                        if (dhtml.querySelector(name).innerHTML.includes('{{children}}')) {
-                            dhtml.querySelector(name).innerHTML = dhtml.querySelector(name).innerHTML.replace('{{children}}', html.querySelector(name).querySelector('slot').innerHTML);
-                        }
-                    }
-                }
-            });
-        }
-    });
-
-    document.querySelectorAll('img, svg').forEach((item) => {
-        let src = item.getAttribute('src') || item.getAttribute('data-src');
-        let preload = document.createElement('link');
-        preload.setAttribute('rel', 'preload');
-        preload.setAttribute('href', src);
-        preload.type = 'image/*';
-        preload.setAttribute('as', 'image');
-        document.querySelector('head').appendChild(preload);
-        const observer = new IntersectionObserver((entries) => {
-            entries.forEach((entry) => {
-                if (entry.isIntersecting) {
-                    item.setAttribute('src', src);
-                    observer.unobserve(item);
-                }
-            });
-        });
-        observer.observe(item);
-    });
-
+    
     dhtml.querySelectorAll('var').forEach((item) => {
         item.style.display = 'none';
         let varName = item.getAttribute('name');
@@ -162,8 +64,87 @@ let props =    sessionStorage.getItem('$dox-props') ? JSON.parse(sessionStorage.
         item.remove();
         return;
     });
-
+    dhtml.querySelectorAll('[props]').forEach((item) => {
+        let name = item.tagName;
+        if (html.querySelector(name)) {
+            let $props = item.getAttribute('props').split(':');
+            $props.forEach((prop) => {
+                props[name] = $props;
+                sessionStorage.setItem('$dox-props', JSON.stringify(props));
+                if (prop == 'children') {
+                    if (html.querySelector(name).querySelector('slot')) {
+                        if (dhtml.querySelector(name).innerHTML.includes('{{children}}')) {
+                            dhtml.querySelector(name).innerHTML = dhtml.querySelector(name).innerHTML.replace('{{children}}', html.querySelector(name).querySelector('slot').innerHTML);
+                        }
+                    }
+                }
+            });
+        }
+    });
     dhtml.querySelectorAll('*').forEach((element) => {
+
+
+
+ 
+        let attributes = Object.values(element.attributes);
+
+
+        attributes.forEach((attr) => {
+
+            let attrValue = attr.value;
+
+            if (attrValue.includes('{{')) {
+                let matches = attrValue.match(/{{(.*?)}}/g);
+
+                if (matches) {
+                    matches.forEach((match) => {
+                        let value = match.replace('{{', '').replace('}}', '');
+                        let prop = element.parentNode.getAttribute(value);
+                        let parent = document.querySelector(element.parentNode.tagName);
+                        if (parent && parent.getAttribute(value)) {
+                            prop = parent.getAttribute(value);
+                        }
+                        attrValue = attrValue.replace(new RegExp(`{{${value}}}`, 'g'), prop);
+                    });
+                    element.setAttribute(attr.name, attrValue);
+                }
+            }
+        });
+        let matches = element.innerHTML.match(/{{(.*?)}}/g);
+
+        if (matches) {
+            matches.forEach((match) => {
+
+                let value = match.split('{{')[1].split('}}')[0];
+                let el = dhtml.querySelector(element.tagName);
+                let parent = el.parentNode.tagName;
+                html.querySelectorAll('*').forEach((item) => {
+                    if (item.tagName == parent) {
+                        let prop = item.getAttribute(value);
+                        if (prop) {
+                            if (prop.toString().toLowerCase() == 'true') {
+                                prop = prop.toString().toLowerCase();
+                            }
+                            let attrValue = element.innerHTML.replace(new RegExp(`{{${value}}}`, 'g'), prop);
+                            element.innerHTML = attrValue;
+                        }
+                    }
+                });
+            });
+        }
+        if (element.hasAttribute('state')) {
+            let state = element.getAttribute('state')
+            console.log(element.getAttribute('state'))
+            element.innerHTML = element.innerHTML + getState(state)
+            if (document.querySelector(element.tagName)) {
+                document.querySelector(element.tagName).innerHTML = element.innerHTML
+            }
+            effect((state), (state) => {
+                if (document.querySelector(element.tagName)) {
+                    document.querySelector(element.tagName).innerHTML = state
+                }
+            })
+        }
         let exported = item.getAttribute('exports').split(',');
         exported.forEach((exportItem) => {
             let el = exportItem.replace(/\s/g, '');
@@ -179,6 +160,16 @@ let props =    sessionStorage.getItem('$dox-props') ? JSON.parse(sessionStorage.
             });
         });
     });
+
+   
+
+ 
+
+   
+
+   
+ 
+ 
 }
 
 
@@ -245,18 +236,17 @@ imports.map((item) => {
                     return response.text();
                 })
                 .then((data) => {
-                    if (data.includes('import ')) {
-                        throw new Error('Import statements with the "from" keyword are not allowed. Use $import instead.');
-                    } else if (data.includes('export ')) {
-                        throw new Error('Export statements are not allowed. Use $export instead.');
-                    } else if (data.includes('document') && !item.includes('tailwind.js')) {
+                    if (data.includes('document') && !item.includes('tailwind.js')) {
                         throw new Error('Imported JS file cannot contain document. Use dox instead.');
                     } else if ((data.includes('innerHTML') || data.includes('innerText')) && !item.endsWith('tailwind.js')) {
                         throw new Error('Use dox:text to return text and dox:$ to return HTML.');
                     }
 
-                    let func = new Function(data);
-                    func();
+                    let script = document.createElement('script');
+                    script.innerHTML = data;
+                    script.type = 'module';
+                    document.querySelector('head').appendChild(script);
+
                 });
         } else {
             let func = new Function(cache[item]);
@@ -265,35 +255,7 @@ imports.map((item) => {
     }
 });
 
-function reloadjsdox() {
-    imports.map((item) => {
-        if (!item.endsWith('.js')) return;
-        if (!cache[item]) {
-            fetch(item)
-                .then((response) => {
-                    return response.text();
-                })
-                .then((data) => {
-                    if (data.includes('import ')) {
-                        throw new Error('Import statements with the "from" keyword are not allowed. Use $import instead.');
-                    } else if (data.includes('export ')) {
-                        throw new Error('Export statements are not allowed. Use $export instead.');
-                    } else if (data.includes('document') && !item.includes('tailwind.js')) {
-                        throw new Error('Imported JS file cannot contain document. Use dox instead.');
-                    } else if ((data.includes('innerHTML') || data.includes('innerText')) && !item.endsWith('tailwind.js')) {
-                        throw new Error('Use dox:text to return text and dox:$ to return HTML.');
-                    }
 
-                    let func = new Function(data);
-                    func();
-                });
-        } else {
-            let func = new Function(cache[item]);
-            func();
-        }
-    })
-
-}
 
 
 const parser = (data) => {
@@ -305,19 +267,296 @@ const parser = (data) => {
     let parsed = performance.now();
     let finished;
 
+
     let _export = html.querySelector('export');
+    let _vars = html.querySelectorAll('var');
+
+    _vars.forEach((item) => {
+        item.style.display = 'none';
+        let varName = item.getAttribute('name');
+        let varValue = item.innerHTML;
+        html.querySelectorAll('*').forEach((element) => {
+            if (element.innerHTML.includes(`{{${varName}}}`)) {
+                element.innerHTML = element.innerHTML.replace(`{{${varName}}}`, varValue);
+            }
+            toplevelprops.forEach((item) => {
+                if (element.innerHTML.includes(`{{${item.name}}}`)) {
+                    element.innerHTML = element.innerHTML.replace(`{{${item.name}}}`, item.value);
+                }
+            });
+        });
+        item.remove();
+        return;
+    })
     if (_export) {
         _export = _export.innerHTML.replace(/\s/g, '');
         _export = _export.split(',');
         _export = _export.filter(Boolean);
 
 
+        function methods(element) {
+            element.inject = (code) => {
+                console.log(element)
+                element.innerHTML = code;
+              };
+              let props = sessionStorage.getItem('$dox-props') ? JSON.parse(sessionStorage.getItem('$dox-props')) : [];
+              props = props[element.tagName];
+              if (props) {
+                element.props = props;
+              }
+              element.class = (name) => {
+                element.className = name;
+              };
+              element.parent = () => {
+                return element.parentNode;
+              };
+              element.classes = element.classList;
+              element.html = () =>{
+                return element.innerHTML;
+              }
+              element.text = element.innerText;
+              element.prepend = (code) => {
+                element.innerHTML = code + element.innerHTML;
+              };
+              element.append = (code) => {
+                console.log(element, code)
+                element.innerHTML += code;
+              };
+              element.blur = () => {
+                element.blur();
+              };
+              element.fade = (time) => {
+                element.style.transition = `opacity ${time}s`;
+                element.style.opacity = 0;
+              }
+              element.focus = element.focus;
+              element.queryAll = (target) => {
+                 let targets = element.querySelectorAll(target);
+                 element.forEach = (callback) => {
+                    targets.forEach((item) => {
+                        callback(item);
+                    });
+                  };
+                 targets.forEach((item) => {
+                    let el = methods(item);
+                     item = el;
+                 });
+                    return targets;
+              };
+              
+              element.after = (code) => {
+                  element.insertAdjacentHTML('afterend', code);
+              };
+              element.before = (code) => {
+                  element.insertAdjacentHTML('beforebegin', code);
+              };
+              element.attr = (name, value) => {
+                  if (value) {
+                      element.setAttribute(name, value);
+                  } else {
+                      return element.getAttribute(name);
+                  }
+              };
+              element.replace = (elementName, code) => {
+                  let newElement =  document.createElement(elementName);
+                  newElement.innerHTML = code;
+                  element.parentNode.replaceChild(newElement, element);
+              };
+              element.on = (event, callback) => {
+                  element.addEventListener(event, callback);
+              };
+              element.getChildren = () => {
+                let childs = [];
+                  let traverse = (el) => {
+                      
+                      let children = el.children;
+                      for (let i = 0; i < children.length; i++) {
+                          children[i] = methods(children[i]);
+                          children[i].parent = el;
+                          children[i].index = i;
+                         
+
+                          childs.push(children[i]);
+                          traverse(children[i]);
+                      }
+
+  
+                  };
+                  element.forEach = (callback) => {
+                    childs.forEach((item) => {
+                        callback(item);
+                    });
+                  };
+                  element.map = (callback, index) => {
+                    if(index){
+                      childs.forEach((item) => {
+                        callback(item, index);
+                    });
+                    }else{
+                        childs.forEach((item) => {
+                            callback(item);
+                        });
+                    }
+
+                  };
+                  traverse(element);
+                    return childs;
+                  
+              };
+              
+              
+              return element;
+        }
+        
+        let dox = {
+            currentRoute: () => {
+                return window.location.hash.split('#')[1];
+            },
+            addEl(el) {
+               
+                let element = document.createElement(el);
+ 
+              
+                return methods(element);
+            },
+             
+
+            querySelector: (selector) => {
+                let element = document.querySelector(selector) || html.querySelector(selector);
+                if (element) {
+                    return methods(element);
+                }
+            },
+
+            querySelectorAll: (selector) => {
+                
+                let elements = document.querySelectorAll(selector) || html.querySelectorAll(selector);
+                elements.forEach((item) => {
+                    let el = methods(item);
+                    item = el;
+                });
+                return elements;
+                
+            },
+            html:  document.querySelector('html').innerHTML,
+            text:  document.querySelector('html').innerText,
+            on: (event, callback) => {
+                window.addEventListener(event, callback);
+            },
+            post: (url, data, callback, headers) => {
+                // check if data is object - text or json
+                if (typeof data === 'object') {
+                    data = JSON.stringify(data);
+                    fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            headers
+                        },
+                        body: data,
+                    })
+                        .then((response) => {
+                            if(headers.responseType == 'json'){
+                                return response.json()
+                            }else{
+                                return response.text()
+                            }
+                        })
+                }
+                else if (typeof data === 'string') {
+
+                    fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'text/plain',
+                            headers
+                        },
+                        body: data,
+                    })
+                        .then((response) => {
+                            if(headers.responseType == 'json'){
+                                return response.json()
+                            }else{
+                                return response.text()
+                            }
+                        })
+                        .then((data) => {
+                            callback(data);
+                        });
+                    
+                }else if (JSON.parse(data)) {
+                    fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            headers
+                        },
+                        body: JSON.stringify(data),
+                        
+                    })
+                        .then((response) => response.json())
+                        .then((data) => {
+                            callback(data);
+                        });
+                }
+                 
+            },
+            get: (url, callback, headers) => {
+                fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        headers
+                    },
+                })
+                    .then((response) => response.json())
+                    .then((data) => {
+                        callback(data);
+                    });
+            },
+            put: (url, data, callback, headers) => {
+                fetch(url, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        headers
+                    },
+                    body: JSON.stringify(data),
+                })
+                    .then((response) => response.json())
+                    .then((data) => {
+                        callback(data);
+                    });
+            },
+            delete: (url, callback, headers) => {
+                fetch(url, {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        headers
+                    },
+                })
+                    .then((response) => response.json())
+                    .then((data) => {
+                        callback(data);
+                    });
+            },
+            
+
+
+
+
+
+        }
+        window.dox = dox;
         _export.forEach((item) => {
 
- 
+
             let template = html.querySelector(item);
 
-             
+
+
+
             let attributes = [];
 
 
@@ -363,16 +602,37 @@ const parser = (data) => {
                 }
             });
 
-             
+            let onchangeInputs = {
+                'input': true,
+                'textarea': true,
+                'select': true,
+            }
+            html.querySelectorAll('*').forEach((element) => {
+                if (element.hasAttribute('state')) {
+                    let state = element.getAttribute('state')
+                    console.log(element.getAttribute('state'))
+                    element.innerHTML = element.innerHTML + getState(state)
+                    if (document.querySelector(element.tagName)) {
+                        document.querySelector(element.tagName).innerHTML = element.innerHTML
+                    }
+                    effect((state), (state) => {
+                        if (document.querySelector(element.tagName)) {
+                            document.querySelector(element.tagName).innerHTML = state
+                        }
+                    })
+                }
+            })
+
+
             if (html.querySelector(item).hasAttribute('props')) {
                 let $props = html.querySelector(item).getAttribute('props').split(':');
-               
+
                 $props.forEach((prop) => {
-                   
-                  
+
+
                     props[item] = $props
                     sessionStorage.setItem('$dox-props', JSON.stringify(props))
-                    
+
                     let derivatives = template.querySelectorAll('[derive]');
                     derivatives.forEach((subitem) => {
                         let attr = subitem.getAttribute('derive');
@@ -382,19 +642,19 @@ const parser = (data) => {
                             subitem.innerHTML = subitem.innerHTML.replace(`{{${attr}}}`, derivedvalue);
                         }
                     });
-   
+
                     let propElements = template.innerHTML.split('{{');
-                    
+
                     propElements.forEach((element) => {
                         let prop = element.split('}}')[0];
-                       
+
                         if (template.innerHTML.includes(`{{${prop}}}`)) {
                             template.innerHTML = template.innerHTML.replace(`{{${prop}}}`, body.querySelector(item).getAttribute(prop));
                         }
 
                     })
                     if (template.innerHTML.includes(`{{${prop}}}`)) {
-                         
+
                         // replace {{prop}} with the value of the prop
                         template.innerHTML = template.innerHTML.replace(`{{${prop}}}`, body.querySelector(item).getAttribute(prop));
                     }
@@ -410,7 +670,7 @@ const parser = (data) => {
             let element = body.querySelector(item);
 
             element.innerHTML = template.innerHTML;
-  
+
             function rerender(blocked) {
 
 
@@ -447,7 +707,7 @@ const parser = (data) => {
 
                     });
                 }
-                
+
             }
 
 
@@ -472,7 +732,7 @@ const parser = (data) => {
 
 
 
- 
+
 
             function showRender(elemente) {
                 let rendered = false;
@@ -492,9 +752,9 @@ const parser = (data) => {
                         let attributePos = parent.getAttribute('route');
                         let position = parent.getAttribute('position');
                         if (attributePos && position === 'first') {
-                            renderElement(element, template, 'first', parent.getAttribute('route'));
+                            renderElement(element, template, 'first', parent.getAttribute('route'), parent.getAttribute('title'));
                         } else if (attributePos && position === 'last') {
-                            renderElement(element, template, 'last', parent.getAttribute('route'));
+                            renderElement(element, template, 'last', parent.getAttribute('route'), parent.getAttribute('title'));
                         }
                     } else {
 
@@ -503,30 +763,30 @@ const parser = (data) => {
                         el.innerHTML = `<h1 style="text-align:center;margin-top:50vh">Route is blocked!</h1>`
                         element.innerHTML = el.outerHTML
                     }
-                }else{
+                } else {
                     let el = document.querySelector(elemente)
                     let parent = el ? el.parentNode : null;
                     let template = html.querySelector(item);
                     _routes[window.location.hash] = template.innerHTML;
-                    if(parent && parent.hasAttribute('route') || parent.hasAttribute('overide')){
+                    if (parent && parent.hasAttribute('route') || parent.hasAttribute('overide')) {
                         let attributePos = parent.getAttribute('route');
                         let position = parent.getAttribute('position');
                         el.innerHTML = ''
                         if (attributePos && position === 'first') {
-                            renderElement(el, template, 'first', parent.getAttribute('route'));
+                            renderElement(el, template, 'first', parent.getAttribute('route'), parent.getAttribute('title'));
                         } else if (attributePos && position === 'last') {
-                            renderElement(el, template, 'last', parent.getAttribute('route'));
+                            renderElement(el, template, 'last', parent.getAttribute('route'), parent.getAttribute('title'));
                         }
 
-                    }else{
+                    } else {
                         let el = document.createElement('div');
                         el.style = 'position:fixed;top:0;left:0;right:0;bottom:0;background:white;z-index:9999; font-family: sans-serif; font-size: 30px;'
                         el.innerHTML = `<h1 style="text-align:center;margin-top:50vh">Route is blocked!</h1>`
                         element.innerHTML = el.outerHTML
-                    }    
+                    }
                 }
 
-                function renderElement(target, template, position, route) {
+                function renderElement(target, template, position, route, title) {
                     _routes[route] = template.innerHTML;
                     route = '#' + route;
                     let errored;
@@ -541,6 +801,8 @@ const parser = (data) => {
                     });
 
                     if (route === window.location.hash && !errored) {
+
+                        document.title = title ? title : 'html-dox'
                         element.innerHTML = template.innerHTML;
                         return;
                     } else {
@@ -550,56 +812,59 @@ const parser = (data) => {
 
 
 
+
+
             }
 
             if (!_routes[window.location.hash]) {
                 window.location.hash = root;
             }
 
+
             showRender();
 
             window.addEventListener('hashchange', () => {
                 document.querySelector('html').setAttribute('root', window.location.hash.split('#')[1]);
                 showRender();
-                reloadjsdox()
                 rerender()
 
 
             });
 
-            
+
 
 
         });
     }
 
     // lazy load images
-     
-    
 
 
-  
+
+
+
 
     window.$import = (data) => {
         if (data.endsWith('.js')) {
-            fetch(file)
+            fetch(data)
                 .then((response) => {
                     return response.text();
                 })
                 .then((data) => {
-                    if (data.includes('import ')) {
-                        throw new Error('Import statements with the "from" keyword are not allowed. Use $import instead.');
-                    } else if (data.includes('export ')) {
-                        throw new Error('Export statements are not allowed. Use $export instead.');
-                    } else
-                        if (data.includes('document') && !item.includes('tailwind.js')) {
-                            throw new Error('Imported js file cannot contain document use dox instead')
-                        } else if (data.includes('innerHTML') || data.includes('innerText') && !item.endsWith('tailwind.js')) {
-                            throw new Error('use dox:text  to return text and dox:$ to return html')
-                        }
 
-                    let func = new Function(data)
-                    func()
+                    if (data.includes('document') && !item.includes('tailwind.js')) {
+                        throw new Error('Imported js file cannot contain document use dox instead')
+                    } else if (data.includes('innerHTML') || data.includes('innerText') && !item.endsWith('tailwind.js')) {
+                        throw new Error('use dox:text  to return text and dox:$ to return html')
+                    }
+
+                    let script = document.createElement('script')
+                    script.innerHTML = data
+                    script.type = 'module'
+                    document.querySelector('head').appendChild(script)
+
+
+                    console.log(data)
                 })
         } else {
             return window[data]
@@ -608,7 +873,7 @@ const parser = (data) => {
     window.$export = (name, value) => {
         window[name] = value
     }
-    
+
 
     body.querySelectorAll('type').forEach((item) => {
         let subtypes = item.querySelectorAll('subtype');
@@ -767,386 +1032,51 @@ const parser = (data) => {
 
 
 
-    
+
 
 }
 
-
+ 
 
 document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => {
         document.body.style.display = 'block'
-        
-    }, 150)
-    
+
+    }, 250)
+
 })
- 
-let dox = {
-    currentRoute: () => {
-        return window.location.hash.split('#')[1];
-    },
-    rendered: (callback = () => { }) => {
-        document.querySelectorAll('*').forEach((element) => {
-            
-          
 
-            if (element.parentNode.tagName == 'RENDER' && element.innerHTML.length > 0
-            ) {
-                
-                callback({
-                    name: element.tagName,
-                    props:    JSON.parse(sessionStorage.getItem('$dox-props'))[element.tagName],
-                     
-                    
-                    html: element.innerHTML,
-                    rendered: finished + 'ms'
+const states = {};
 
-                })
+// Function to set the state value
+const setState = ($name, $value) => {
+    states[$name] = $value;
+    window.postMessage({ name: $name, value: $value }, '*');
+};
 
-            }
-        })
+// Function to get the state value
+const getState = ($name) => {
+    return states[$name];
+};
 
-    },
+// Event listener to update the state when receiving messages
+window.addEventListener('message', (event) => {
+    if (event.origin !== window.location.origin) return;
+    const { name, value } = event.data;
+    states[name] = value;
+});
 
-    querySelector: (selector) => {
-        let el = document.querySelector(selector) || html.querySelector(selector);
+// Function to handle side effects based on state changes
+const effect = ($name, callback = () => { }) => {
+    window.addEventListener('message', (event) => {
+        if (event.origin !== window.location.origin) return;
+        const { name, value } = event.data;
+        if (name === $name)
+            callback(value);
+        return;
+    });
+};
+window.effect = effect
+window.getState = getState
 
-        if (el) {
-            let methods = {
-                getDescendants: () => {
-                    let descendants = [];
-                    let traverse = (el) => {
-
-                        let children = el.children;
-                        for (let i = 0; i < children.length; i++) {
-                            descendants.push(children[i]);
-                            traverse(children[i]);
-                        }
-                    }
-                    traverse(el);
-
-                    return {
-                        forEach: (callback) => {
-                            descendants.forEach((item) => {
-                                callback({
-                                    id: item.id,
-                                    class: item.className,
-                                    text: item.innerText,
-                                    setHtml: (value) => {
-                                        item.innerHTML = value;
-                                    },
-                                    getItem: (name) => {
-                                        return item.querySelector(`#${name}`);
-                                    },
-                                    getHtml: () => {
-                                        return item.innerHTML;
-                                    },
-                                    getChildren: () => {
-                                        let children = [];
-                                        item.querySelectorAll('*').forEach((item) => {
-                                            if (item.parentNode === el) {
-                                                children.push(item);
-                                            }
-                                        });
-                                        return children;
-                                    },
-                                    getAncestors: () => {
-                                        let ancestors = [];
-                                        let parent = item.parentNode;
-                                        while (parent) {
-                                            ancestors.push(parent);
-                                            parent = parent.parentNode;
-                                        }
-                                        return ancestors;
-                                    },
-                                    props: () => {
-                                        return props[item.tagName]
-                                    },
-                                    querySelector: (selector) => {
-                                        descendants = descendants.filter((item) => {
-                                            return item.matches(selector);
-                                        });
-                                        return descendants;
-                                    },
-                                    fadeIn: (time) => {
-                                        item.style.opacity = 0;
-                                        item.style.transition = `opacity ${time}s`;
-                                        item.style.opacity = 1;
-                                    },
-                                    fadeOut: (time) => {
-                                        item.style.opacity = 1;
-                                        item.style.transition = `opacity ${time}s`;
-                                        item.style.opacity = 0;
-                                    },
-
-                                    on: (event, callback) => {
-                                        item.addEventListener(event, callback);
-                                    },
-                                    inject: (code) => {
-                                        item.innerHTML = code;
-
-                                    },
-                                    state: (name) => {
-                                        let state = states.find((state) => state.name === name);
-                                        if (state) {
-                                            return state.value;
-                                        } else {
-                                            throw new Error(`State "${name}" does not exist`);
-                                        }
-                                    },
-                                    setState: (name, value) => {
-                                        let state = states.find((state) => state.name === name);
-                                        if (state) {
-                                            state.value = value;
-                                        } else {
-                                            states.push({
-                                                name,
-                                                value
-                                            });
-                                        }
-                                    }
-                                    ,
-                                    watch: (name, callback) => {
-                                        let state = states.find((state) => state.name === name);
-                                        if (state) {
-                                            callback(state.value);
-                                        } else {
-                                            throw new Error(`State "${name}" does not exist`);
-                                        }
-                                    }
-
-                                });
-                            });
-
-                        },
-                        map: (callback) => {
-                            let mapped = [];
-                            descendants.forEach((item) => {
-                                mapped.push(callback(item));
-                            });
-                            return mapped;
-                        },
-                        querySelector: (selector) => { dox.querySelector(selector) },
-                        querySelectorAll: (selector) => {
-                            descendants = descendants.filter((item) => {
-                                return item.matches(selector);
-                            });
-                            return descendants;
-                        },
-                        inject: (target, code) => {
-                            let targetEl = document.querySelector(target);
-                            if (targetEl) {
-                                targetEl.innerHTML = code;
-                            }
-                        },
-                        html: () => {
-                            let html = '';
-                            descendants.forEach((item) => {
-                                html += item.outerHTML;
-                            });
-                            return html;
-                        },
-                        getAncestors: () => {
-                            let ancestors = [];
-                            let parent = el.parentNode;
-                            while (parent) {
-                                ancestors.push(parent);
-                                parent = parent.parentNode;
-                            }
-                            return ancestors;
-                        }
-                    }
-                },
-               attr: (name, value) => {
-                    if(value)
-                    el.setAttribute(name, value);
-                    else{
-                        return el.getAttribute(name)
-                    }
-                },
-                replaceType: (tagName) => {
-                    let newel = document.createElement(tagName);
-                    newel.innerHTML = el.innerHTML;
-                    let att = Object.values(el.attributes);
-                    att.forEach((item) => {
-                        newel.setAttribute(item.name, item.value);
-                    });
-                    el.classList.forEach((item) => {
-                        newel.classList.add(item);
-                    });
-                    el.parentNode.replaceChild(newel, el);
-
-                },
-               
-                props: JSON.parse(sessionStorage.getItem('$dox-props'))[el.tagName],
-                 
-                inject: (target, code) => {
-                    let targetEl = document.querySelector(target);
-                    if (targetEl) {
-                        targetEl.innerHTML = code;
-                    }
-                },
-                getAncestors: () => {
-                    let ancestors = [];
-                    let parent = el.parentNode;
-                    while (parent) {
-                        ancestors.push(parent);
-                        parent = parent.parentNode;
-                    }
-                    return ancestors;
-                },
-                text: el.innerText,
-                html: el.innerHTML,
-                getChildren: () => {
-                    let children = [];
-                    el.querySelectorAll('*').forEach((item) => {
-                        if (item.parentNode === el) {
-                            children.push(item);
-                        }
-                    });
-                    return children;
-                }
-
-            }
-            return methods;
-        } else {
-            return null;
-        }
-    },
-    querySelectorAll: (selector) => {
-        let els = document.querySelectorAll(selector) || html.querySelectorAll(selector);
-        if (els) {
-            let methods = {
-                forEach: (callback) => {
-
-                    els.forEach((item) => {
-                        callback({
-                            id: item.id,
-                            class: item.className,
-                            text: item.innerText,
-                            html: item.innerHTML,
-                            getChildren: () => {
-                                let children = [];
-                                item.querySelectorAll('*').forEach((item) => {
-                                    if (item.parentNode === el) {
-                                        children.push(item);
-                                    }
-                                });
-                                return children;
-                            },
-                            getAncestors: () => {
-                                let ancestors = [];
-                                let parent = item.parentNode;
-                                while (parent) {
-                                    ancestors.push(parent);
-                                    parent = parent.parentNode;
-                                }
-                                return ancestors;
-                            },
-                            querySelector: (selector) => {
-                                els = els.filter((item) => {
-                                    return item.matches(selector);
-                                });
-                                return els;
-                            },
-                            fadeIn: (time) => {
-                                item.style.opacity = 0;
-                                item.style.transition = `opacity ${time}s`;
-                                item.style.opacity = 1;
-                            },
-                            fadeOut: (time) => {
-                                item.style.opacity = 1;
-                                item.style.transition = `opacity ${time}s`;
-                                item.style.opacity = 0;
-                            },
-
-                            on: (event, callback) => {
-                                item.addEventListener(event, callback);
-                            },
-                            inject: (code) => {
-                                item.innerHTML = code;
-                            },
-                            state: (name) => {
-                                let state = states.find((state) => state.name === name);
-                                if (state) {
-                                    return state.value;
-                                } else {
-                                    throw new Error(`State "${name}" does not exist`);
-                                }
-                            },
-                            setState: (name, value) => {
-                                let state = states.find((state) => state.name === name);
-                                if (state) {
-                                    state.value = value;
-                                } else {
-                                    states.push({
-                                        name,
-                                        value
-                                    });
-                                }
-                            }
-                            ,
-                            watch: (name, callback) => {
-                                let state = states.find((state) => state.name === name);
-                                if (state) {
-                                    callback(state.value);
-                                } else {
-                                    throw new Error(`State "${name}" does not exist`);
-                                }
-                            }
-
-                        });
-                    });
-                }
-                ,
-                map: (callback) => {
-                    let mapped = [];
-                    els.forEach((item) => {
-                        mapped.push(callback(item));
-                    });
-                    return mapped;
-                },
-                querySelector: (selector) => { dox.querySelector(selector) },
-                querySelectorAll: (selector) => {
-                    els = els.filter((item) => {
-                        return item.matches(selector);
-                    });
-                    return els;
-                },
-                inject: (target, code) => {
-                    let targetEl = document.querySelector(target);
-                    if (targetEl) {
-                        targetEl.innerHTML = code;
-                    }
-                }
-                ,
-
-                getAncestors: () => {
-                    let ancestors = [];
-                    let parent = el.parentNode;
-                    while (parent) {
-                        ancestors.push(parent);
-                        parent = parent.parentNode;
-                    }
-                    return ancestors;
-                },
-                text: el.innerText,
-                html: el.innerHTML,
-                getChildren: () => {
-                    let children = [];
-                    el.querySelectorAll('*').forEach((item) => {
-                        if (item.parentNode === el) {
-                            children.push(item);
-                        }
-                    });
-                    return children;
-                }
-            }
-            return methods;
-        } else {
-            return null;
-        }
-    },
-
-}
-window.dox = dox;
+window.setState = setState
