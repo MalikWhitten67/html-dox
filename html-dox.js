@@ -1,5 +1,12 @@
+window.open = () => {
+    return;
+}
+let dox;
+let el;
+let currentRender;
 let templates = [];
 let importsTag = document.querySelector('imports')
+let domScript = importsTag.hasAttribute('dom-script')
 importsTag.style.display = 'none'
 let toplevelprops = []
 // remove whitespace
@@ -10,13 +17,7 @@ imports = imports.split(',')
 imports = imports.filter(Boolean)
 
 let cache = {}
-if (document.querySelector('script') && !document.querySelector('script').getAttribute('src').includes('html-dox.js')) {
-    throw new Error('html-dox.js must be the last script tag in the body')
-} else if (document.querySelector('style')) {
-    throw new Error('Style tags are not supported in dox!')
-} else if (document.querySelector('link')) {
-    throw new Error('Link tags are not supported in dox!')
-}
+
 document.body.style.display = 'none'
 let types = []
 // constraint types - for type checking
@@ -38,225 +39,156 @@ let variables = []
 let props = sessionStorage.getItem('$dox-props') ? JSON.parse(sessionStorage.getItem('$dox-props')) : {}
 
 
-function setData(data, html, body, item) {
-    let importName = item.getAttribute('exports').split(',');
-    let dom = new DOMParser();
-    let dhtml = dom.parseFromString(data, 'text/html');
+
+
+
+
+document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => {
+        document.body.style.display = 'block'
+
+    }, 200)
+
+})
 
  
-
-    let props = {};
-    
-    dhtml.querySelectorAll('var').forEach((item) => {
-        item.style.display = 'none';
-        let varName = item.getAttribute('name');
-        let varValue = item.innerHTML;
-        dhtml.querySelectorAll('*').forEach((element) => {
-            if (element.innerHTML.includes(`{{${varName}}}`)) {
-                element.innerHTML = element.innerHTML.replace(`{{${varName}}}`, varValue);
-            }
-            toplevelprops.forEach((item) => {
-                if (element.innerHTML.includes(`{{${item.name}}}`)) {
-                    element.innerHTML = element.innerHTML.replace(`{{${item.name}}}`, item.value);
-                }
-            });
-        });
-        item.remove();
-        return;
-    });
-    dhtml.querySelectorAll('[props]').forEach((item) => {
-        let name = item.tagName;
-        if (html.querySelector(name)) {
-            let $props = item.getAttribute('props').split(':');
-            $props.forEach((prop) => {
-                props[name] = $props;
-                sessionStorage.setItem('$dox-props', JSON.stringify(props));
-                if (prop == 'children') {
-                    if (html.querySelector(name).querySelector('slot')) {
-                        if (dhtml.querySelector(name).innerHTML.includes('{{children}}')) {
-                            dhtml.querySelector(name).innerHTML = dhtml.querySelector(name).innerHTML.replace('{{children}}', html.querySelector(name).querySelector('slot').innerHTML);
-                        }
-                    }
-                }
-            });
-        }
-    });
-    dhtml.querySelectorAll('*').forEach((element) => {
-
-
-
  
-        let attributes = Object.values(element.attributes);
-
-
-        attributes.forEach((attr) => {
-
-            let attrValue = attr.value;
-
-            if (attrValue.includes('{{')) {
-                let matches = attrValue.match(/{{(.*?)}}/g);
-
-                if (matches) {
-                    matches.forEach((match) => {
-                        let value = match.replace('{{', '').replace('}}', '');
-                        let prop = element.parentNode.getAttribute(value);
-                        let parent = document.querySelector(element.parentNode.tagName);
-                        if (parent && parent.getAttribute(value)) {
-                            prop = parent.getAttribute(value);
-                        }
-                        attrValue = attrValue.replace(new RegExp(`{{${value}}}`, 'g'), prop);
-                    });
-                    element.setAttribute(attr.name, attrValue);
-                }
-            }
-        });
-        let matches = element.innerHTML.match(/{{(.*?)}}/g);
-
-        if (matches) {
-            matches.forEach((match) => {
-
-                let value = match.split('{{')[1].split('}}')[0];
-                let el = dhtml.querySelector(element.tagName);
-                let parent = el.parentNode.tagName;
-                html.querySelectorAll('*').forEach((item) => {
-                    if (item.tagName == parent) {
-                        let prop = item.getAttribute(value);
-                        if (prop) {
-                            if (prop.toString().toLowerCase() == 'true') {
-                                prop = prop.toString().toLowerCase();
-                            }
-                            let attrValue = element.innerHTML.replace(new RegExp(`{{${value}}}`, 'g'), prop);
-                            element.innerHTML = attrValue;
-                        }
-                    }
-                });
-            });
-        }
-        if (element.hasAttribute('state')) {
-            let state = element.getAttribute('state')
-            console.log(element.getAttribute('state'))
-            element.innerHTML = element.innerHTML + getState(state)
-            if (document.querySelector(element.tagName)) {
-                document.querySelector(element.tagName).innerHTML = element.innerHTML
-            }
-            effect((state), (state) => {
-                if (document.querySelector(element.tagName)) {
-                    document.querySelector(element.tagName).innerHTML = state
-                }
-            })
-        }
-        let exported = item.getAttribute('exports').split(',');
-        exported.forEach((exportItem) => {
-            let el = exportItem.replace(/\s/g, '');
-            importName.forEach((importItem) => {
-                if (importItem == el) {
-                    if (html.querySelector(el)) {
-                        html.querySelector(el).innerHTML = dhtml.querySelector(el).innerHTML;
-                        if (body.querySelector(el) && dhtml.querySelector(el)) {
-                            body.querySelector(el).innerHTML = dhtml.querySelector(el).innerHTML;
-                        }
-                    }
-                }
-            });
-        });
-    });
-
-   
-
- 
-
-   
-
-   
- 
- 
-}
-
-
-imports.map((item) => {
-    if (!item.endsWith('.html') && !item.endsWith('.css') && !item.endsWith('.js')) {
-        throw new Error('Unsupported imported file type!');
+class Router {
+    constructor(routes) {
+      this.routes = routes || {};
+      this.currentRoute = '';
+  
+      // Attach event listeners to handle hash changes and DOMContentLoaded
+      window.addEventListener('hashchange', () => {
+        this.route();
+      });
+      window.addEventListener('DOMContentLoaded', () => {
+        this.route();
+      });
+  
+      this.fallbackRoute = '';
+      this.errorOn = false;
     }
-
-    if (item.endsWith('.html')) {
-        let preload = document.createElement('link');
-        preload.setAttribute('rel', 'preload');
-        preload.setAttribute('href', item);
-        preload.type = 'text/html';
-        preload.setAttribute('as', 'document');
-        document.querySelector('head').appendChild(preload);
-
-        if (cache[item]) {
-            parser(cache[item]);
-        } else {
-            fetch(item)
-                .then((response) => {
-                    return response.text();
-                })
-                .then((data) => {
-                    cache[item] = data;
-                    parser(data);
-                });
-        }
-    } else if (item.endsWith('.css')) {
-        let preload = document.createElement('link');
-        preload.setAttribute('rel', 'preload');
-        preload.setAttribute('href', item);
-        preload.type = 'text/css';
-        preload.setAttribute('as', 'style');
-        document.querySelector('head').appendChild(preload);
-
-        let style = document.createElement('style');
-        if (!cache[item]) {
-            fetch(item)
-                .then((response) => {
-                    return response.text();
-                })
-                .then((data) => {
-                    cache[item] = data;
-                    style.innerHTML = data;
-                    document.querySelector('head').appendChild(style);
-                });
-        } else {
-            let style = document.createElement('style');
-            style.innerHTML = cache[item];
-            document.querySelector('head').appendChild(style);
-        }
-    } else if (item.endsWith('.js')) {
-        let preload = document.createElement('link');
-        preload.setAttribute('rel', 'preload');
-        preload.setAttribute('href', item);
-        preload.type = 'text/javascript';
-        preload.setAttribute('as', 'script');
-        document.querySelector('head').appendChild(preload);
-
-        if (!cache[item]) {
-            fetch(item)
-                .then((response) => {
-                    return response.text();
-                })
-                .then((data) => {
-                    if (data.includes('document') && !item.includes('tailwind.js')) {
-                        throw new Error('Imported JS file cannot contain document. Use dox instead.');
-                    } else if ((data.includes('innerHTML') || data.includes('innerText')) && !item.endsWith('tailwind.js')) {
-                        throw new Error('Use dox:text to return text and dox:$ to return HTML.');
-                    }
-
-                    let script = document.createElement('script');
-                    script.innerHTML = data;
-                    script.type = 'module';
-                    document.querySelector('head').appendChild(script);
-
-                });
-        } else {
-            let func = new Function(cache[item]);
-            func();
-        }
+  
+    route() {
+      const hash = window.location.hash.slice(1); // Remove the "#" character
+      this.currentRoute = hash;
+      this.navigate();
     }
-});
-
-
-
+  
+    render(route) {
+      templates.forEach((item) => {
+        let parent = item.parent;
+        let template = item.template;
+        let element = item.element;
+  
+        let title = parent.getAttribute('title');
+        if (title) {
+            document.title = title;
+        }
+        if (parent.getAttribute('route') == route) {
+          rerender();
+          element.innerHTML = template;
+          window.currentRender = element;
+        } else {
+          element.innerHTML = '';
+        }
+      });
+    }
+  
+    navigate() {
+      let matchingRoute = false;
+  
+      if (this.routes) {
+        Object.keys(this.routes).forEach(async (route) => {
+          if (this.isRouteMatch(this.currentRoute, route)) {
+            matchingRoute = true;
+            const routeHandler = this.routes[route];
+            const params = this.extractParams(this.currentRoute, route);
+  
+            // Remove  any existing route params for example /:hello/:car
+            // check if route has params
+             if(route.includes(':')){
+                route = route.replace(/:[a-zA-Z]+/g, '')[0]
+             }else{
+                route = route
+             }
+         
+            this.render(route); // Render the corresponding route
+  
+            await setTimeout(() => {},2); // because dom is not ready yet we must wait for it to be ready!
+            routeHandler({ params });
+  
+            // Store currentRoute and req.params in global "dox" object
+            window.dox = dox
+            window.dox['route'] = () => this.currentRoute;
+            window.dox['params'] = params;
+          }else{
+            matchingRoute = false;
+            if (this.fallbackRoute) {
+                window.location.hash = '#' + this.fallbackRoute;
+              }
+          }
+        });
+      }
+  
+      if (!matchingRoute && this.fallbackRoute) {
+        window.location.hash = '#' + this.fallbackRoute;
+      }
+    }
+  
+    isRouteMatch(route, pattern) {
+      const routeSegments = route.split('/').filter((segment) => segment !== '');
+      const patternSegments = pattern.split('/').filter((segment) => segment !== '');
+  
+      if (routeSegments.length !== patternSegments.length) {
+        return false;
+      }
+  
+      for (let i = 0; i < patternSegments.length; i++) {
+        const routeSegment = routeSegments[i];
+        const patternSegment = patternSegments[i];
+  
+        if (patternSegment.startsWith(':')) {
+          continue;
+        }
+  
+        if (routeSegment !== patternSegment) {
+          return false;
+        }
+      }
+  
+      return true;
+    }
+  
+    get(route, handler) {
+      this.routes[route] = handler;
+    }
+  
+    redirect(route) {
+      window.location.hash = '#' + route;
+    }
+  
+    extractParams(route, pattern) {
+      const routeSegments = route.split('/').filter((segment) => segment !== '');
+      const patternSegments = pattern.split('/').filter((segment) => segment !== '');
+      const params = {};
+  
+      for (let i = 0; i < patternSegments.length; i++) {
+        const patternSegment = patternSegments[i];
+  
+        if (patternSegment.startsWith(':')) {
+          const paramName = patternSegment.slice(1);
+          const paramValue = routeSegments[i];
+          params[paramName] = paramValue;
+        }
+      }
+  
+      return params;
+    }
+  }
+  
+window.Router = Router
 
 const parser = (data) => {
     let dom = new DOMParser();
@@ -266,24 +198,229 @@ const parser = (data) => {
     let states = [];
     let parsed = performance.now();
     let finished;
+     
+    function setData(data, html, body, item) {
+        let importName = item.getAttribute('exports').split(',');
+        let dom = new DOMParser();
+        let dhtml = dom.parseFromString(data, 'text/html');
+    
+    
+    
+        let props = {};
+    
+        let parsedjs = (code, parent) => {
+            let style;
+            if (code.includes('style')) {
+                // style.propertie = value     // ex:   {{style.background = "red"}}
+                style = code.split('.')
+                // get propterie and value
+                let prop = style[1].split('=')[0]
+                let value = style[1].split('=')[1]
+    
+                dhtml.querySelector(parent.tagName).style[prop] = value
+                body.querySelector(parent.tagName).style[prop] = value
+            } else {
+                if (code.includes('{{')) {
+                    let value = code.split('{{')[1].split('}}')[0]
+                    eval(value)
+                }
+            }
+            if (code.includes('parent')) {
+    
+            }
+        }
+        if (dhtml.querySelector('if')) {
+            let el = dhtml.querySelector('if')
+    
+            let prop = el.getAttribute('prop') ? el.getAttribute('prop') : null
+            let is = el.getAttribute('is')
+            let elseis = el.getAttribute('else')
+            let elparent = el.parentNode
+            let parentprops = el.getAttribute('props') ? el.getAttribute('props').split(',') : null
+    
+            let rendered = html.querySelector(elparent.tagName)
+            if (prop && parentprops) {
+                parentprops.forEach((item) => {
+    
+                    let propvalue = rendered.getAttribute(prop)
+                    if (propvalue == is) {
+                        let template = el.innerHTML
+                        if (template.includes('{{')) {
+                            let value = template.split('{{')[1].split('}}')[0]
+                            parsedjs(value, elparent)
+                        }
+                    }
+    
+                })
+            }
+    
+        }
+        dhtml.querySelectorAll('var').forEach((item) => {
+            item.style.display = 'none';
+            let varName = item.getAttribute('name');
+            let varValue = item.innerHTML;
+            dhtml.querySelectorAll('*').forEach((element) => {
+                let matches = element.innerHTML.match(/{{(.*?)}}/g);
+                if (matches && element.innerHTML.includes(`{{${varName}}}`)) {
+                    matches.forEach((match) => {
+                        element.innerHTML = element.innerHTML.replace(match, varValue)
+                    });
+                }
+            });
+            item.remove();
+            return;
+        });
+        dhtml.querySelectorAll('[props]').forEach((item) => {
+            let name = item.tagName;
+            if (html.querySelector(name)) {
+                let $props = item.getAttribute('props').split(':');
+                $props.forEach((prop) => {
+                    props[name] = $props;
+                    sessionStorage.setItem('$dox-props', JSON.stringify(props));
+                    if (prop == 'children') {
+                        if (html.querySelector(name).querySelector('slot')) {
+                            if (dhtml.querySelector(name).innerHTML.includes('{{children}}')) {
+                                dhtml.querySelector(name).innerHTML = dhtml.querySelector(name).innerHTML.replace('{{children}}', html.querySelector(name).querySelector('slot').innerHTML);
+                            }
+                        }
+                    }
+                });
+            }
+        });
+        dhtml.querySelectorAll('*').forEach((element) => {
+    
+    
+    
+    
+            let attributes = Object.values(element.attributes);
+    
+    
+            attributes.forEach((attr) => {
+    
+                let attrValue = attr.value;
+    
+                if (attrValue.includes('{{')) {
+                    let matches = attrValue.match(/{{(.*?)}}/g);
+    
+                    if (matches) {
+                        matches.forEach((match) => {
+                            let value = match.replace('{{', '').replace('}}', '');
+                            let prop = element.parentNode.getAttribute(value);
+                            let parent = document.querySelector(element.parentNode.tagName);
+                            if (parent && parent.getAttribute(value)) {
+                                prop = parent.getAttribute(value);
+                            }
+                            attrValue = attrValue.replace(new RegExp(`{{${value}}}`, 'g'), prop);
+                        });
+                        element.setAttribute(attr.name, attrValue);
+                    }
+                }
+            });
+            let matches = element.innerHTML.match(/{{(.*?)}}/g);
+    
+            if (matches) {
+                matches.forEach((match) => {
+    
+                    let value = match.split('{{')[1].split('}}')[0];
+                    let el = dhtml.querySelector(element.tagName);
+                    let parent = el.parentNode.tagName;
+                    html.querySelectorAll('*').forEach((item) => {
+                        if (item.tagName == parent) {
+                            let prop = item.getAttribute(value);
+                            if (prop) {
+                                if (prop.toString().toLowerCase() == 'true') {
+                                    prop = prop.toString().toLowerCase();
+                                }
+                                let attrValue = element.innerHTML.replace(new RegExp(`{{${value}}}`, 'g'), prop);
+                                element.innerHTML = attrValue;
+                            }
+                        }
+                    });
+                });
+            }
+            if (element.hasAttribute('state')) {
+                let state = element.getAttribute('state')
+    
+                
+                element.innerHTML = element.innerHTML + getState(state)
+                if (document.querySelector(element.tagName)) {
+                    document.querySelector(element.tagName).innerHTML = element.innerHTML
+                }
+                effect((state), (state) => {
+                    if (document.querySelector(element.tagName)) {
+                        document.querySelector(element.tagName).innerHTML = state
+                    }
+                })
+            }
+            let exported = item.getAttribute('exports').split(',');
+            exported.forEach(async (exportItem) => {
+                 const el = await dhtml.querySelector(exportItem);
+                if (el) {
+                  html.querySelector(exportItem).innerHTML = el.innerHTML;
+                  document.querySelector(exportItem) ? document.querySelector(exportItem).innerHTML = el.innerHTML : null
+                }
+                 
+            });
+             
+        });
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    }
+    
+    let imports = html.querySelectorAll('import');
+             
+    imports.forEach((item) => {
+       
+        let file = item.getAttribute('src');
 
+        if (!file.endsWith('.html')) {
+            throw new Error('Unsupported imported file type!');
+        }
+
+        if (!window[file]) {
+
+            fetch(file)
+                .then((response) => {
+                    return response.text();
+                })
+                .then((data) => {
+
+                   
+                    window[file] = data
+                    setData(data, html, body, item)
+
+                });
+        } else {
+            setData(window[file], html, body, item)
+        }
+
+    });
 
     let _export = html.querySelector('export');
+    _export.style.display = 'none';
     let _vars = html.querySelectorAll('var');
 
     _vars.forEach((item) => {
+
         item.style.display = 'none';
         let varName = item.getAttribute('name');
         let varValue = item.innerHTML;
         html.querySelectorAll('*').forEach((element) => {
-            if (element.innerHTML.includes(`{{${varName}}}`)) {
-                element.innerHTML = element.innerHTML.replace(`{{${varName}}}`, varValue);
+            let matches = element.innerHTML.match(/{{(.*?)}}/g);
+            if (matches && element.innerHTML.includes(`{{${varName}}}`)) {
+                matches.forEach((match) => {
+                    element.innerHTML = element.innerHTML.replace(match, varValue)
+                });
             }
-            toplevelprops.forEach((item) => {
-                if (element.innerHTML.includes(`{{${item.name}}}`)) {
-                    element.innerHTML = element.innerHTML.replace(`{{${item.name}}}`, item.value);
-                }
-            });
+
         });
         item.remove();
         return;
@@ -294,261 +431,8 @@ const parser = (data) => {
         _export = _export.filter(Boolean);
 
 
-        function methods(element) {
-            element.inject = (code) => {
-                console.log(element)
-                element.innerHTML = code;
-              };
-              let props = sessionStorage.getItem('$dox-props') ? JSON.parse(sessionStorage.getItem('$dox-props')) : [];
-              props = props[element.tagName];
-              if (props) {
-                element.props = props;
-              }
-              element.class = (name) => {
-                element.className = name;
-              };
-              element.parent = () => {
-                return element.parentNode;
-              };
-              element.classes = element.classList;
-              element.html = () =>{
-                return element.innerHTML;
-              }
-              element.text = element.innerText;
-              element.prepend = (code) => {
-                element.innerHTML = code + element.innerHTML;
-              };
-              element.append = (code) => {
-                console.log(element, code)
-                element.innerHTML += code;
-              };
-              element.blur = () => {
-                element.blur();
-              };
-              element.fade = (time) => {
-                element.style.transition = `opacity ${time}s`;
-                element.style.opacity = 0;
-              }
-              element.focus = element.focus;
-              element.queryAll = (target) => {
-                 let targets = element.querySelectorAll(target);
-                 element.forEach = (callback) => {
-                    targets.forEach((item) => {
-                        callback(item);
-                    });
-                  };
-                 targets.forEach((item) => {
-                    let el = methods(item);
-                     item = el;
-                 });
-                    return targets;
-              };
-              
-              element.after = (code) => {
-                  element.insertAdjacentHTML('afterend', code);
-              };
-              element.before = (code) => {
-                  element.insertAdjacentHTML('beforebegin', code);
-              };
-              element.attr = (name, value) => {
-                  if (value) {
-                      element.setAttribute(name, value);
-                  } else {
-                      return element.getAttribute(name);
-                  }
-              };
-              element.replace = (elementName, code) => {
-                  let newElement =  document.createElement(elementName);
-                  newElement.innerHTML = code;
-                  element.parentNode.replaceChild(newElement, element);
-              };
-              element.on = (event, callback) => {
-                  element.addEventListener(event, callback);
-              };
-              element.getChildren = () => {
-                let childs = [];
-                  let traverse = (el) => {
-                      
-                      let children = el.children;
-                      for (let i = 0; i < children.length; i++) {
-                          children[i] = methods(children[i]);
-                          children[i].parent = el;
-                          children[i].index = i;
-                         
-
-                          childs.push(children[i]);
-                          traverse(children[i]);
-                      }
-
-  
-                  };
-                  element.forEach = (callback) => {
-                    childs.forEach((item) => {
-                        callback(item);
-                    });
-                  };
-                  element.map = (callback, index) => {
-                    if(index){
-                      childs.forEach((item) => {
-                        callback(item, index);
-                    });
-                    }else{
-                        childs.forEach((item) => {
-                            callback(item);
-                        });
-                    }
-
-                  };
-                  traverse(element);
-                    return childs;
-                  
-              };
-              
-              
-              return element;
-        }
-        
-        let dox = {
-            currentRoute: () => {
-                return window.location.hash.split('#')[1];
-            },
-            addEl(el) {
-               
-                let element = document.createElement(el);
- 
-              
-                return methods(element);
-            },
-             
-
-            querySelector: (selector) => {
-                let element = document.querySelector(selector) || html.querySelector(selector);
-                if (element) {
-                    return methods(element);
-                }
-            },
-
-            querySelectorAll: (selector) => {
-                
-                let elements = document.querySelectorAll(selector) || html.querySelectorAll(selector);
-                elements.forEach((item) => {
-                    let el = methods(item);
-                    item = el;
-                });
-                return elements;
-                
-            },
-            html:  document.querySelector('html').innerHTML,
-            text:  document.querySelector('html').innerText,
-            on: (event, callback) => {
-                window.addEventListener(event, callback);
-            },
-            post: (url, data, callback, headers) => {
-                // check if data is object - text or json
-                if (typeof data === 'object') {
-                    data = JSON.stringify(data);
-                    fetch(url, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            headers
-                        },
-                        body: data,
-                    })
-                        .then((response) => {
-                            if(headers.responseType == 'json'){
-                                return response.json()
-                            }else{
-                                return response.text()
-                            }
-                        })
-                }
-                else if (typeof data === 'string') {
-
-                    fetch(url, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'text/plain',
-                            headers
-                        },
-                        body: data,
-                    })
-                        .then((response) => {
-                            if(headers.responseType == 'json'){
-                                return response.json()
-                            }else{
-                                return response.text()
-                            }
-                        })
-                        .then((data) => {
-                            callback(data);
-                        });
-                    
-                }else if (JSON.parse(data)) {
-                    fetch(url, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            headers
-                        },
-                        body: JSON.stringify(data),
-                        
-                    })
-                        .then((response) => response.json())
-                        .then((data) => {
-                            callback(data);
-                        });
-                }
-                 
-            },
-            get: (url, callback, headers) => {
-                fetch(url, {
-                    method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        headers
-                    },
-                })
-                    .then((response) => response.json())
-                    .then((data) => {
-                        callback(data);
-                    });
-            },
-            put: (url, data, callback, headers) => {
-                fetch(url, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        headers
-                    },
-                    body: JSON.stringify(data),
-                })
-                    .then((response) => response.json())
-                    .then((data) => {
-                        callback(data);
-                    });
-            },
-            delete: (url, callback, headers) => {
-                fetch(url, {
-                    method: 'DELETE',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        headers
-                    },
-                })
-                    .then((response) => response.json())
-                    .then((data) => {
-                        callback(data);
-                    });
-            },
-            
 
 
-
-
-
-        }
-        window.dox = dox;
         _export.forEach((item) => {
 
 
@@ -602,26 +486,47 @@ const parser = (data) => {
                 }
             });
 
+             
+
             let onchangeInputs = {
                 'input': true,
                 'textarea': true,
                 'select': true,
             }
-            html.querySelectorAll('*').forEach((element) => {
-                if (element.hasAttribute('state')) {
-                    let state = element.getAttribute('state')
-                    console.log(element.getAttribute('state'))
-                    element.innerHTML = element.innerHTML + getState(state)
-                    if (document.querySelector(element.tagName)) {
-                        document.querySelector(element.tagName).innerHTML = element.innerHTML
-                    }
-                    effect((state), (state) => {
-                        if (document.querySelector(element.tagName)) {
-                            document.querySelector(element.tagName).innerHTML = state
-                        }
-                    })
+
+            html.querySelectorAll('[state]').forEach((element) => {
+                let state = element.getAttribute('state')
+
+                element.id = state
+                if (getState(state) == undefined || getState(state) == null) {
+                    setState(state, '')
                 }
+                element.innerHTML = element.innerHTML + getState(state)
+
+                setTimeout(() => {
+                    effect((state), (statev) => {
+
+                        setTimeout(() => {
+                            if (element.tagName == 'INPUT' || element.tagName == 'TEXTAREA') element.value = statev;
+                            if (element.tagName == 'SELECT') element.value = statev;
+                            if (element.tagName == 'IMG') element.src = statev;
+                            if (element.tagName == 'A') element.href = statev;
+                            if (element.tagName == 'IFRAME') element.src = statev;
+                            if (element.tagName == 'VIDEO') element.src = statev;
+                            if (element.tagName == 'AUDIO') element.src = statev;
+                            if (element.tagName == 'EMBED') element.src = statev;
+                            if (element.tagName == 'OBJECT') element.src = statev;
+                            if (element.tagName == 'SOURCE') element.src = statev;
+                            if (element.tagName == 'TRACK') element.src = statev;
+                            else element.innerHTML = statev;
+                            document.querySelector(`#${state}`).innerHTML = statev
+                        }, 0)
+                    })
+                }, 0)
             })
+
+             
+            window.rerender = rerender
 
 
             if (html.querySelector(item).hasAttribute('props')) {
@@ -662,18 +567,18 @@ const parser = (data) => {
             }
 
             templates.push({
-                name: template.tagName,
-                template: template.innerHTML,
+                 element: document.querySelector(item),
+                 template: template.innerHTML,
+                 parent: document.querySelector(item).parentNode,
+                 html: html,
+                    body: body
             });
 
 
-            let element = body.querySelector(item);
-
-            element.innerHTML = template.innerHTML;
-
             function rerender(blocked) {
 
-
+  
+                let element = document.querySelector(item)
                 if (element) {
 
                     document.querySelector(element.tagName).innerHTML = element.innerHTML;
@@ -710,131 +615,409 @@ const parser = (data) => {
 
             }
 
+            function methods(element) {
+                element.inject = (code) => {
+                    element.innerHTML = code;
+                    return methods(element);
+                  };
+                  let props = sessionStorage.getItem('$dox-props') ? JSON.parse(sessionStorage.getItem('$dox-props')) : [];
+                  props = props[element.tagName];
+                  if (props) {
+                    element.props = props;
+                  }
+                  element.class = (name) => {
+                    element.className = name;
+                    return methods(element);
+                  };
+                  element.add = (elementName, options) => {
+                    let newElement = document.createElement(elementName);
+                    if (options) {
+                      Object.keys(options).forEach((key) => {
+                        newElement.setAttribute(key, options[key]);
+                      });
+                    }
+                    element.appendChild(newElement);
 
-
-
-            let routes = document.querySelector('meta[config]')
-            let root = routes.getAttribute('fallback')
-
-
-            let _routes = {}
-            if (routes) {
-                routes = routes.getAttribute('routes')
-                routes = routes.split(',')
-                routes.forEach((item) => {
-                    _routes[`#${item}`] = `#${item}`
-                }
-                )
-
+                    return methods(newElement);
+                  }
+                    element.delete = () => {
+                        element.remove()
+                        return methods(element)
+                    }
+                  
+                  element.parent = ( ) => {
+                    return  methods(element.parentNode);
+                  };
+                  element.classes = (name, option) => {
+                    if (option == 'add')  element.classList.add(name);
+                    if (option == 'remove')  element.classList.remove(name);
+                    if (option == 'toggle')  element.classList.toggle(name);
+                    return methods(element);
+                  };
+                  element.html = (code) =>{
+                     if(code){
+                        element.innerHTML = code;
+                     }else{
+                            return element.innerHTML
+                     }
+                  }
+                  element.text =  (code) =>{
+                    if(code){
+                       element.innerText = code;
+                    }else{
+                           return element.innerText
+                    }
+                  }
+                  element.prepend = (code) => {
+                    element.innerHTML = code + element.innerHTML;
+                    return methods(element);
+                  };
+                  element.append = (code) => {
+                    element.innerHTML += code;
+                    return methods(element);
+                  };
+                  element.blur = () => {
+                    element.blur();
+                  };
+                  element.fade = (time) => {
+                    element.style.transition = `opacity ${time}s`;
+                    element.style.opacity = 0;
+                  }
+                  element.focus = element.focus;
+                  element.queryAll = (target) => {
+                     let targets = element.querySelectorAll(target);
+                     element.forEach = (callback) => {
+                        targets.forEach((item) => {
+                            callback(item);
+                        });
+                      };
+                     targets.forEach((item) => {
+                        let el = methods(item);
+                         item = el;
+                     });
+                        return targets;
+                  };
+                  
+                  element.after = (code) => {
+                      element.insertAdjacentHTML('afterend', code);
+                      return methods(element);
+                  };
+                  element.before = (code) => {
+                      element.insertAdjacentHTML('beforebegin', code);
+                      return methods(element);
+                  };
+                  element.attr = (name, value) => {
+                      if (value) {
+                          element.setAttribute(name, value);
+                      } else {
+                          return element.getAttribute(name);
+                      }
+                  };
+                  element.replace = (elementName, code) => {
+                      let newElement =  document.createElement(elementName);
+                      newElement.innerHTML = code;
+                      element.parentNode.replaceChild(newElement, element);
+                      return methods(newElement);
+                  };
+                  element.on = (event, callback) => {
+                      element.addEventListener(event,  (e) => {
+                         Object.defineProperty(e, 'target', {
+                                value: methods(e.target),
+                         });
+                            Object.defineProperty(e, 'currentTarget', {
+                                value: methods(e.currentTarget),
+                            });
+                            callback(e);
+                            return methods(element);
+                      });
+                  };
+                  element.getChildren = () => {
+                    let childs = [];
+                      let traverse = (el) => {
+                          
+                          let children = el.children;
+                          for (let i = 0; i < children.length; i++) {
+                              children[i] = methods(children[i]);
+                              children[i].parent = el;
+                              children[i].index = i;
+                             
+    
+                              childs.push(children[i]);
+                              traverse(children[i]);
+                          }
+    
+      
+                      };
+                      element.forEach = (callback) => {
+                        childs.forEach((item) => {
+                            callback(item);
+                             
+                        });
+                        return methods(element);
+                      };
+                      element.map = (callback, index) => {
+                        if(index){
+                          childs.forEach((item) => {
+                            callback(item, index);
+                        });
+                        }else{
+                            childs.forEach((item) => {
+                                callback(item);
+                            });
+                        }
+                        return methods(element);
+                      };
+                      traverse(element);
+                        return childs;
+                      
+                  };
+                  
+                  
+                  return element;
             }
-            root = '#' + root
-
-
-
-
-
-
-            function showRender(elemente) {
-                let rendered = false;
-
-                finished = performance.now() - parsed;
-
-                if (!_routes[window.location.hash]) {
-                    window.location.hash = root;
-                }
-                if (element && !elemente) {
-                    rerender()
-                    let parent = element ? element.parentNode : null;
-                    let template = html.querySelector(item);
-                    _routes[window.location.hash] = template.innerHTML;
-
-                    if (parent && parent.hasAttribute('route') || parent.hasAttribute('overide')) {
-                        let attributePos = parent.getAttribute('route');
-                        let position = parent.getAttribute('position');
-                        if (attributePos && position === 'first') {
-                            renderElement(element, template, 'first', parent.getAttribute('route'), parent.getAttribute('title'));
-                        } else if (attributePos && position === 'last') {
-                            renderElement(element, template, 'last', parent.getAttribute('route'), parent.getAttribute('title'));
-                        }
-                    } else {
-
-                        let el = document.createElement('div');
-                        el.style = 'position:fixed;top:0;left:0;right:0;bottom:0;background:white;z-index:9999; font-family: sans-serif; font-size: 30px;'
-                        el.innerHTML = `<h1 style="text-align:center;margin-top:50vh">Route is blocked!</h1>`
-                        element.innerHTML = el.outerHTML
-                    }
-                } else {
-                    let el = document.querySelector(elemente)
-                    let parent = el ? el.parentNode : null;
-                    let template = html.querySelector(item);
-                    _routes[window.location.hash] = template.innerHTML;
-                    if (parent && parent.hasAttribute('route') || parent.hasAttribute('overide')) {
-                        let attributePos = parent.getAttribute('route');
-                        let position = parent.getAttribute('position');
-                        el.innerHTML = ''
-                        if (attributePos && position === 'first') {
-                            renderElement(el, template, 'first', parent.getAttribute('route'), parent.getAttribute('title'));
-                        } else if (attributePos && position === 'last') {
-                            renderElement(el, template, 'last', parent.getAttribute('route'), parent.getAttribute('title'));
-                        }
-
-                    } else {
-                        let el = document.createElement('div');
-                        el.style = 'position:fixed;top:0;left:0;right:0;bottom:0;background:white;z-index:9999; font-family: sans-serif; font-size: 30px;'
-                        el.innerHTML = `<h1 style="text-align:center;margin-top:50vh">Route is blocked!</h1>`
-                        element.innerHTML = el.outerHTML
-                    }
-                }
-
-                function renderElement(target, template, position, route, title) {
-                    _routes[route] = template.innerHTML;
-                    route = '#' + route;
-                    let errored;
-                    !route ? errored = true : errored = false;
-
-
-
-                    target.querySelectorAll('*').forEach((element) => {
-                        if (element.hasAttribute('route')) {
-                            element.innerHTML = '';
+            
+            dox = {
+                route: () => {
+                    return window.currentRoute
+                },
+                currentRender: () => {
+                    return  currentRender
+                },
+                domChange: (type, eventive = false, callback = () => { }) => {
+                    
+            
+                    var initialRenderCompleted = false;
+            
+                    var observer = new MutationObserver(function (mutations) {
+                        if (initialRenderCompleted && type === 'changed') {
+                            mutations.forEach(function (mutation) {
+                                callback(mutation);
+                            });
+                        }else{
+                            callback()
                         }
                     });
-
-                    if (route === window.location.hash && !errored) {
-
-                        document.title = title ? title : 'html-dox'
-                        element.innerHTML = template.innerHTML;
-                        return;
-                    } else {
-                        element.innerHTML = '';
+            
+                    observer.observe(document, {
+                        childList: true,
+                        subtree: true
+                    });
+            
+                    // only work after initial render
+                    setTimeout(() => {
+                        initialRenderCompleted = true;
+                        if (eventive) {
+                            // base callback if user wants to do something after initial render
+                            callback()
+                        }
+            
+            
+                    }, 100);
+                },
+            
+                add: (element, attributes) => {
+                    let el = document.createElement(element);
+            
+            
+                    Object.keys(attributes).forEach((item) => {
+                        el.setAttribute(item, attributes[item]);
+                    });
+                    el = methods(el);
+            
+                    return methods(el);
+            
+                },
+            
+                title: (title) => {
+                    document.title = title;
+                },
+            
+                querySelector:  (selector) => {
+                    
+                    let el =   document.querySelector(selector)  
+                   
+                    if(el) {
+                        el = methods(el);
+                       
                     }
-                }
-
-
-
-
-
+                    return el
+                   
+                     
+                },
+            
+                querySelectorAll: (selector) => {
+            
+                    let element = currentRender
+                    
+                    let els = element.querySelectorAll(selector) || html.querySelectorAll(selector) || body.querySelectorAll(selector) || null;
+                    let elements = [];
+                    els.forEach((item) => {
+                        elements.push(methods(item));
+                    });
+                    return elements;
+            
+                },
+                html: document.querySelector('html').innerHTML,
+                text: document.querySelector('html').innerText,
+                on: (event, callback) => {
+            
+                    window.addEventListener(event, callback);
+                },
+                post: (url, data, callback, headers) => {
+                    // check if data is object - text or json
+                    if (typeof data === 'object') {
+                        data = JSON.stringify(data);
+                        fetch(url, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                headers
+                            },
+                            body: data,
+                        })
+                            .then((response) => {
+                                if (headers.responseType == 'json') {
+                                    return response.json()
+                                } else {
+                                    return response.text()
+                                }
+                            })
+                    }
+                    else if (typeof data === 'string') {
+            
+                        fetch(url, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'text/plain',
+                                headers
+                            },
+                            body: data,
+                        })
+                            .then((response) => {
+                                if (headers.responseType == 'json') {
+                                    return response.json()
+                                } else {
+                                    return response.text()
+                                }
+                            })
+                            .then((data) => {
+                                callback(data);
+                            });
+            
+                    } else if (JSON.parse(data)) {
+                        fetch(url, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                headers
+                            },
+                            body: JSON.stringify(data),
+            
+                        })
+                            .then((response) => response.json())
+                            .then((data) => {
+                                callback(data);
+                            });
+                    }
+            
+                },
+                get: (url, callback, headers) => {
+                    fetch(url, {
+                        method: 'GET',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            headers
+                        },
+                    })
+                        .then((response) => response.json())
+                        .then((data) => {
+                            callback(data);
+                        });
+                },
+                put: (url, data, callback, headers) => {
+                    fetch(url, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            headers
+                        },
+                        body: JSON.stringify(data),
+                    })
+                        .then((response) => response.json())
+                        .then((data) => {
+                            callback(data);
+                        });
+                },
+                delete: (url, callback, headers) => {
+                    fetch(url, {
+                        method: 'DELETE',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            headers
+                        },
+                    })
+                        .then((response) => response.json())
+                        .then((data) => {
+                            callback(data);
+                        });
+                },
+                setMeta: (name, content, property, other = false, discord = false) => {
+                    if (property) {
+                        if (discord) {
+                            if (content.includes('https') || content.includes('http')) {
+                                content = content + '?a=b'
+                                return
+                            }
+                        }
+                        if (document.querySelector(`meta[property="${property}"]`)) {
+                            document.querySelector(`meta[property="${property}"]`).setAttribute('content', content)
+                            if (other) document.querySelector(`meta[property="${property}"]`).setAttribute(other, content);
+                            return
+                        }
+                        else {
+            
+                            let meta = document.createElement('meta');
+                            if (discord) {
+                                if (content.includes('https') || content.includes('http')) {
+                                    content = content + '?a=b'
+                                    return
+                                }
+                            }
+                            if (other) meta.setAttribute(other, content);
+                            meta.setAttribute('property', property);
+                            meta.setAttribute('content', content);
+                            meta.setAttribute('name', name);
+                            document.querySelector('head').appendChild(meta);
+                        }
+            
+                    }
+                    let meta = document.createElement('meta');
+                    meta.setAttribute('name', name);
+                    meta.setAttribute('content', content);
+                    document.querySelector('head').appendChild(meta);
+                },
+            
+            
+            
+            
+            
+            
             }
-
-            if (!_routes[window.location.hash]) {
-                window.location.hash = root;
-            }
-
-
-            showRender();
-
-            window.addEventListener('hashchange', () => {
-                document.querySelector('html').setAttribute('root', window.location.hash.split('#')[1]);
-                showRender();
-                rerender()
+            dox.domChange('changed', (mutation) => {
+                window.hasChanged = true
+            })
+            window.dox = dox;
 
 
-            });
 
+
+ 
+ 
 
 
 
         });
+
     }
 
     // lazy load images
@@ -844,35 +1027,6 @@ const parser = (data) => {
 
 
 
-    window.$import = (data) => {
-        if (data.endsWith('.js')) {
-            fetch(data)
-                .then((response) => {
-                    return response.text();
-                })
-                .then((data) => {
-
-                    if (data.includes('document') && !item.includes('tailwind.js')) {
-                        throw new Error('Imported js file cannot contain document use dox instead')
-                    } else if (data.includes('innerHTML') || data.includes('innerText') && !item.endsWith('tailwind.js')) {
-                        throw new Error('use dox:text  to return text and dox:$ to return html')
-                    }
-
-                    let script = document.createElement('script')
-                    script.innerHTML = data
-                    script.type = 'module'
-                    document.querySelector('head').appendChild(script)
-
-
-                    console.log(data)
-                })
-        } else {
-            return window[data]
-        }
-    }
-    window.$export = (name, value) => {
-        window[name] = value
-    }
 
 
     body.querySelectorAll('type').forEach((item) => {
@@ -1030,21 +1184,112 @@ const parser = (data) => {
 
 
 
-
+  
 
 
 
 }
 
+
  
+ 
+ 
+imports.map((item) => {
+    if (!item.endsWith('.html') && !item.endsWith('.css') && !item.endsWith('.js')) {
+        throw new Error('Unsupported imported file type!');
+    }
+    else if (item.endsWith('.js')) {
+        let preload = document.createElement('link');
+        preload.setAttribute('rel', 'preload');
+        preload.setAttribute('href', item);
+        preload.type = 'text/javascript';
+        preload.setAttribute('as', 'script');
+        document.querySelector('head').appendChild(preload);
 
-document.addEventListener('DOMContentLoaded', () => {
-    setTimeout(() => {
-        document.body.style.display = 'block'
+        if (!cache[item]) {
+            fetch(item)
+                .then((response) => {
+                    return response.text();
+                })
+                .then((data) => {
 
-    }, 250)
+                    if (data.includes('document') && !item.includes('tailwind.js')) {
+                        throw new Error('Imported JS file cannot contain document. Use dox instead.');
+                    } else if ((data.includes('innerHTML') || data.includes('innerText')) && !item.endsWith('tailwind.js')) {
+                        throw new Error('Use dox:text to return text and dox:$ to return HTML.');
+                    }
+                    if (domScript) {
+                        setTimeout(() => {
+                            let script = document.createElement('script')
+                            script.async = true
+                            script.defer = true
+                            script.innerHTML = data
+                            document.body.appendChild(script)
+                        }, 0)
 
-})
+                    } else {
+                        setTimeout(() => {
+                            let pscript = document.createElement('script')
+                            
+                            pscript.id = 'dox-script'
+                
+                            pscript.type = 'module'
+                            pscript.innerHTML = data
+                            document.head.appendChild(pscript)
+
+                            dox.domChange('changed', (mutation) => {
+                                
+                                if (document.querySelector('#dox-script')) {
+                                    document.querySelector('#dox-script').remove()
+                                    let script = document.createElement('script')
+                                    
+                                  
+                                    script.id = 'dox-script'
+                                    script.type = 'module'
+                                    script.innerHTML = data
+
+                                    document.head.appendChild(script)
+
+                                }
+                            })
+                        })
+
+
+
+                    }
+
+
+
+                });
+        } else {
+            (() => {
+                cache[item]
+            })()
+
+        }
+    }
+    if (item.endsWith('.html')) {
+        let preload = document.createElement('link');
+        preload.setAttribute('rel', 'preload');
+        preload.setAttribute('href', item);
+        preload.type = 'text/html';
+        preload.setAttribute('as', 'document');
+        document.querySelector('head').appendChild(preload);
+
+        if (cache[item]) {
+            parser(cache[item]);
+        } else {
+            fetch(item)
+                .then((response) => {
+                    return response.text();
+                })
+                .then((data) => {
+                    cache[item] = data;
+                    parser(data);
+                });
+        }
+    }
+});
 
 const states = {};
 
@@ -1080,3 +1325,7 @@ window.effect = effect
 window.getState = getState
 
 window.setState = setState
+
+
+
+export default dox; 
