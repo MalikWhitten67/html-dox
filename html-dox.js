@@ -47,230 +47,10 @@ let props = sessionStorage.getItem('$dox-props') ? JSON.parse(sessionStorage.get
 const parser = async (data) => {
     let dom = new DOMParser();
     let html = dom.parseFromString(data, 'text/html');
-    html = html.querySelector('html');
-    let body = document.querySelector('body');
-    let states = [];
-    let parsed = performance.now();
-    let finished;
-
-    function setData(data, html, body, item) {
-        let importName = item.getAttribute('exports').split(',');
-        let dom = new DOMParser();
-        let dhtml = dom.parseFromString(data, 'text/html');
-
-
-
-        let props = {};
-
-        let parsedjs = (code, parent) => {
-            let style;
-            if (code.includes('style')) {
-                // style.propertie = value     // ex:   {{style.background = "red"}}
-                style = code.split('.')
-                // get propterie and value
-                let prop = style[1].split('=')[0]
-                let value = style[1].split('=')[1]
-
-                dhtml.querySelector(parent.tagName).style[prop] = value
-                body.querySelector(parent.tagName).style[prop] = value
-            } else {
-                if (code.includes('{{')) {
-                    let value = code.split('{{')[1].split('}}')[0]
-                    eval(value)
-                }
-            }
-            if (code.includes('parent')) {
-
-            }
-        }
-        if (dhtml.querySelector('if')) {
-            let el = dhtml.querySelector('if')
-
-            let prop = el.getAttribute('prop') ? el.getAttribute('prop') : null
-            let is = el.getAttribute('is')
-            let elseis = el.getAttribute('else')
-            let elparent = el.parentNode
-            let parentprops = el.getAttribute('props') ? el.getAttribute('props').split(',') : null
-
-            let rendered = html.querySelector(elparent.tagName)
-            if (prop && parentprops) {
-                parentprops.forEach((item) => {
-
-                    let propvalue = rendered.getAttribute(prop)
-                    if (propvalue == is) {
-                        let template = el.innerHTML
-                        if (template.includes('{{')) {
-                            let value = template.split('{{')[1].split('}}')[0]
-                            parsedjs(value, elparent)
-                        }
-                    }
-
-                })
-            }
-
-        }
-        dhtml.querySelectorAll('var').forEach((item) => {
-            item.style.display = 'none';
-            let varName = item.getAttribute('name');
-            let varValue = item.innerHTML;
-            dhtml.querySelectorAll('*').forEach((element) => {
-                let matches = element.innerHTML.match(/{{(.*?)}}/g);
-                if (matches && element.innerHTML.includes(`{{${varName}}}`)) {
-                    matches.forEach((match) => {
-                        element.innerHTML = element.innerHTML.replace(match, varValue)
-                    });
-                }
-            });
-            item.remove();
-            return;
-        });
-        let proptemplates =[]
-        dhtml.querySelectorAll('[props]').forEach((item) => {
-            
-            let name = item.tagName;
-            if (html.querySelector(name)) {
-                let $props = item.getAttribute('props').split(':');
-                $props.forEach((prop) => {
-                    props[name] = $props;
-                    sessionStorage.setItem('$dox-props', JSON.stringify(props))
-                     
-                    if (prop == 'children') {
-                        if (html.querySelector(name).querySelector('slot')) {
-                            if (dhtml.querySelector(name).innerHTML.includes('{{children}}')) {
-                                if(proptemplates.length > 0){
-                                    proptemplates.forEach((item) => {
-                                       if(item.parent == dhtml.querySelector(name).parentNode){
-                                        dhtml.querySelector(name).innerHTML = item.template
-                                       }
-                                    })
-
-                                }
-                                proptemplates.push({
-                                    element: dhtml.querySelector(name),
-                                    template: dhtml.querySelector(name).innerHTML,
-                                    parent: dhtml.querySelector(name).parentNode ? dhtml.querySelector(name).parentNode : null,
-                                })
-                                
-                                dhtml.querySelector(name).innerHTML = dhtml.querySelector(name).innerHTML.replace('{{children}}', html.querySelector(name).querySelector('slot').innerHTML);
-                              
-                            }
-                        }
-                    }else{
-                        if (html.querySelector(name).getAttribute(prop)) {
-                           
-                            if(proptemplates.length > 0){
-                                proptemplates.forEach((item) => {
-
-                                   if(dhtml.querySelector(name).innerHTML.includes(`{{${prop}}}`)){
-                                     dhtml.querySelector(name).innerHTML = dhtml.querySelector(name).innerHTML.replace(`{{${prop}}}`, html.querySelector(name).getAttribute(prop));
-                                  
-                                   }
-                                })
-
-                            }
-                            if (dhtml.querySelector(name).innerHTML.includes(`{{${prop}}}`)) {
-                                proptemplates.push({
-                                    element: dhtml.querySelector(name),
-                                    template: dhtml.querySelector(name).innerHTML,
-                                    parent: dhtml.querySelector(name).parentNode ? dhtml.querySelector(name).parentNode : null,
-                                })
-                                
-                                let value = html.querySelector(name).getAttribute(prop);
-                                dhtml.querySelector(name).innerHTML = dhtml.querySelector(name).innerHTML.replace(`{{${prop}}}`, value);
-                            }
-                        }
-                    }
-                });
-            }
-        });
-        dhtml.querySelectorAll('*').forEach((element) => {
-
-
-
-
-            let attributes = Object.values(element.attributes);
-
-
-            attributes.forEach((attr) => {
-
-                let attrValue = attr.value;
-
-                if (attrValue.includes('{{')) {
-                    let matches = attrValue.match(/{{(.*?)}}/g);
-
-                    if (matches) {
-                        matches.forEach((match) => {
-                            let value = match.replace('{{', '').replace('}}', '');
-                            let prop = element.parentNode.getAttribute(value);
-                            let parent = document.querySelector(element.parentNode.tagName);
-                            if (parent && parent.getAttribute(value)) {
-                                prop = parent.getAttribute(value);
-                            }
-                            attrValue = attrValue.replace(new RegExp(`{{${value}}}`, 'g'), prop);
-                        });
-                        element.setAttribute(attr.name, attrValue);
-                    }
-                }
-            });
-            let matches = element.innerHTML.match(/{{(.*?)}}/g);
-
-            if (matches) {
-                matches.forEach((match) => {
-
-                    let value = match.split('{{')[1].split('}}')[0];
-                    let el = dhtml.querySelector(element.tagName);
-                    let parent = el.parentNode.tagName;
-                    html.querySelectorAll('*').forEach((item) => {
-                        if (item.tagName == parent) {
-                            let prop = item.getAttribute(value);
-                            if (prop) {
-                                if (prop.toString().toLowerCase() == 'true') {
-                                    prop = prop.toString().toLowerCase();
-                                }
-                                let attrValue = element.innerHTML.replace(new RegExp(`{{${value}}}`, 'g'), prop);
-                                element.innerHTML = attrValue;
-                            }
-                        }
-                    });
-                });
-            }
-            if (element.hasAttribute('state')) {
-                let state = element.getAttribute('state')
-
-
-                element.innerHTML = element.innerHTML + getState(state)
-                if (document.querySelector(element.tagName)) {
-                    document.querySelector(element.tagName).innerHTML = element.innerHTML
-                }
-                effect((state), (state) => {
-                    if (document.querySelector(element.tagName)) {
-                        document.querySelector(element.tagName).innerHTML = state
-                    }
-                })
-            }
-            let exported = item.getAttribute('exports').split(',');
-            exported.forEach(async (exportItem) => {
-                const el = await dhtml.querySelector(exportItem);
-                if (el) {
-                    html.querySelector(exportItem).innerHTML = el.innerHTML;
-                    document.querySelector(exportItem) ? document.querySelector(exportItem).innerHTML = el.innerHTML : null
-                }
-
-            });
-
-        });
-
-
-
-
-
-
-
-
-
-
-    }
-
+    html = html.body
+    let body = document.body
+  
+   
     let imports = html.querySelectorAll('import');
 
     imports.forEach((item) => {
@@ -299,6 +79,9 @@ const parser = async (data) => {
         }
 
     });
+  
+
+  
 
     let _export = html.querySelector('export');
     _export.style.display = 'none';
@@ -311,6 +94,19 @@ const parser = async (data) => {
         let varValue = item.innerHTML;
         html.querySelectorAll('*').forEach((element) => {
             let matches = element.innerHTML.match(/{{(.*?)}}/g);
+            let attrmatches = element.outerHTML.match(/{{(.*?)}}/g);
+            // check if attribute has {{}}
+            if (attrmatches) {
+                attrmatches.forEach((match) => {
+                    let attr = match.split('{{')[1].split('}}')[0];
+                     // check if it is from a var
+                    if (attr == varName) {
+                        if(element.parentNode){
+                            element.outerHTML = element.outerHTML.replace(match, varValue)
+                        }
+                    }
+                });
+            }else 
             if (matches && element.innerHTML.includes(`{{${varName}}}`)) {
                 matches.forEach((match) => {
                     element.innerHTML = element.innerHTML.replace(match, varValue)
@@ -426,11 +222,15 @@ const parser = async (data) => {
 
 
             if (html.querySelector(item).hasAttribute('props')) {
+                let el = html.querySelector(item)
+                 
                 let $props = html.querySelector(item).getAttribute('props').split(':');
 
-                $props.forEach((prop) => {
 
+                $props.forEach((prop) => {
  
+ 
+                    
                     props[item] = $props
                     sessionStorage.setItem('$dox-props', JSON.stringify(props))
 
@@ -453,11 +253,10 @@ const parser = async (data) => {
                         }
                     }
                     else {
-                        if (html.querySelector(item).getAttribute(prop)) {
-                            if (html.querySelector(item).innerHTML.includes(`{{${prop}}}`)) {
-                                let value = html.querySelector(item).getAttribute(prop);
-                                html.querySelector(item).innerHTML = html.querySelector(item).innerHTML.replace(`{{${prop}}}`, value);
-                            }
+                        
+                        if (body.querySelector(item).getAttribute(prop)) {
+                             
+                          html.querySelector(item).innerHTML = html.querySelector(item).innerHTML.replace(`{{${prop}}}`, body.querySelector(item).getAttribute(prop));
                         }
                     }
 
@@ -467,8 +266,7 @@ const parser = async (data) => {
          
            
                 if(document.querySelector(item)){
-                    let el = html.querySelector(item)
-                    body.querySelector(item).innerHTML = el.innerHTML
+                    
                     templates.push({
                         element: document.querySelector(item),
                         parent: document.querySelector(item).parentNode,
@@ -481,7 +279,7 @@ const parser = async (data) => {
            
 
 
-            function rerender(blocked) {
+            function rerender(ele) {
 
 
                 let element = html.querySelector(item);
@@ -489,7 +287,7 @@ const parser = async (data) => {
 
                     let modules = html.querySelectorAll('import')
 
-                    modules.forEach((item) => {
+                    modules.forEach(async (item) => {
                         let file = item.getAttribute('src');
 
                         if (!file.endsWith('.html')) {
@@ -503,28 +301,35 @@ const parser = async (data) => {
                                 .then((response) => {
                                     return response.text();
                                 })
-                                .then((data) => {
+                                .then(async (data) => {
 
+                                    await setTimeout(() => {}, 0)
                                     window[file] = data
-                                    setData(data, html, body, item)
+                                    setData(data, html, document.body, item)
                                 })
                             return;
 
                         } else {
 
-                            setData(window[file], html, body, item)
+                            await setTimeout(() => {}, 0)
+                            setData(window[file], html, document.body, item)
                         }
 
                     });
                 }
+                
 
             }
 
             function methods(element) {
+                    
+           
+             
                 element.inject = (code) => {
                     element.innerHTML = code;
                     return methods(element);
                 };
+                
                 let props = sessionStorage.getItem('$dox-props') ? JSON.parse(sessionStorage.getItem('$dox-props')) : [];
                 props = props[element.tagName];
                 if (props) {
@@ -645,6 +450,7 @@ const parser = async (data) => {
                     });
                 };
                 element.setProp = (prop, value) => {
+                    
                     if(value){
                         html.querySelector(element.tagName).setAttribute(prop, value)
                         rerender()
@@ -712,13 +518,24 @@ const parser = async (data) => {
                     return currentRender
                 },
                 setProp: (element, prop, value) => {
-                    // check if element is inside of <render> tag
+                   
                     let el = html.querySelector(element)
+                     
                     if (el) {
                         el.setAttribute(prop, value)
                         rerender()
                     }
                     return methods(el)
+                },
+                current: () =>{
+                    // check if this fucntion is inside of a attribute like <button onclick="dox.current()">
+
+                    let element = document.activeElement
+                     
+                    if(element){
+                         element.isActive = true
+                         return methods(element)
+                    }
                 },
                 domChange: (type, eventive = false, callback = () => { }) => {
 
@@ -1172,14 +989,16 @@ class Router {
     }
 
     render(route) {
-       
 
         templates.forEach((item) => {
-             
             let parent = item.parent;
             let template = item.template;
             let element = item.element;
- 
+
+            let title = parent.getAttribute('title');
+            if (title) {
+                document.title = title;
+            }
             if (parent.getAttribute('route') == route) {
 
                 rerender();
@@ -1227,24 +1046,21 @@ class Router {
                 const routeHandler = this.routes[route];
                 const routeWithoutAsterisk =  route.split('/*')[0];
                 this.render(routeWithoutAsterisk);
-                window.dox = window.dox || {};
+      
                 await setTimeout(() => {}, 2); // Wait for the DOM to be ready
       
                 // Pass the asterisk value as a parameter to the route handler
                 routeHandler({ asterisk });
       
-                
+                window.dox = window.dox || {};
       
                 return;
               } else {
                 const routeHandler = this.routes[route];
                 this.render(route);
-          
-                await setTimeout(() => {
-                    routeHandler({ params, query }); 
-                }, 2); // Wait for the DOM to be ready
-            
-             
+      
+                await setTimeout(() => {}, 2); // Wait for the DOM to be ready
+                routeHandler({ params, query });
                 window.dox = window.dox || {};
                 return;
               }
@@ -1256,7 +1072,6 @@ class Router {
           window.location.hash = '#' + this.fallbackRoute;
         }
       }
-      
 
       isRouteMatch(route, pattern) {
         const routeSegments = route.split('/').filter((segment) => segment !== '');
@@ -1431,9 +1246,260 @@ imports.map((item) => {
         }
     }
 });
+async function setData(data, html, body, item) {
+    let exported = item.getAttribute('exports').split(',');
+    let importName = item.getAttribute('exports').split(',');
+    let dom = new DOMParser();
+     let dhtml = await dom.parseFromString(data, 'text/html').body
+ 
+
+
+
+    let props = {};
+
+    let parsedjs = (code, parent) => {
+        let style;
+        if (code.includes('style')) {
+            // style.propertie = value     // ex:   {{style.background = "red"}}
+            style = code.split('.')
+            // get propterie and value
+            let prop = style[1].split('=')[0]
+            let value = style[1].split('=')[1]
+
+            dhtml.querySelector(parent.tagName).style[prop] = value
+            body.querySelector(parent.tagName).style[prop] = value
+        } else {
+            if (code.includes('{{')) {
+                let value = code.split('{{')[1].split('}}')[0]
+                eval(value)
+            }
+        }
+        if (code.includes('parent')) {
+
+        }
+    }
+    if (dhtml.querySelector('if')) {
+        let el = dhtml.querySelector('if')
+
+        let prop = el.getAttribute('prop') ? el.getAttribute('prop') : null
+        let is = el.getAttribute('is')
+        let elseis = el.getAttribute('else')
+        let elparent = el.parentNode
+        let parentprops = el.getAttribute('props') ? el.getAttribute('props').split(',') : null
+
+        let rendered = html.querySelector(elparent.tagName)
+        if (prop && parentprops) {
+            parentprops.forEach((item) => {
+
+                let propvalue = rendered.getAttribute(prop)
+                if (propvalue == is) {
+                    let template = el.innerHTML
+                    if (template.includes('{{')) {
+                        let value = template.split('{{')[1].split('}}')[0]
+                        parsedjs(value, elparent)
+                    }
+                }
+
+            })
+        }
+
+    }
+    dhtml.querySelectorAll('var').forEach((item) => {
+        item.style.display = 'none';
+        let varName = item.getAttribute('name');
+        let varValue = item.innerHTML;
+        dhtml.querySelectorAll('*').forEach((element) => {
+            let matches = element.innerHTML.match(/{{(.*?)}}/g);
+            if (matches && element.innerHTML.includes(`{{${varName}}}`)) {
+                matches.forEach((match) => {
+                    element.innerHTML = element.innerHTML.replace(match, varValue)
+                });
+            }
+        });
+        item.remove();
+        return;
+    });
+    
+    let proptemplates =[]
+    
+    dhtml.querySelectorAll('[props]').forEach(async (item) => {
+         
+        let name = item.tagName;
+        if (html.querySelector(name)) {
+            let $props = item.getAttribute('props').split(':');
+            $props.forEach(async (prop) => {
+                props[name] = $props;
+                sessionStorage.setItem('$dox-props', JSON.stringify(props))
+                 
+                if (prop == 'children') {
+                    
+                    if (html.querySelector(name).querySelector('slot')) {
+                        if (dhtml.querySelector(name).innerHTML.includes('{{children}}')) {
+                            if(proptemplates.length > 0){
+                                proptemplates.forEach((item) => {
+                                   if(item.parent == dhtml.querySelector(name).parentNode){
+                                    dhtml.querySelector(name).innerHTML = item.template
+                                   }
+                                })
+
+                            }
+                            proptemplates.push({
+                                element: dhtml.querySelector(name),
+                                template: dhtml.querySelector(name).innerHTML,
+                                parent: dhtml.querySelector(name).parentNode ? dhtml.querySelector(name).parentNode : null,
+                            })
+                            
+                            
+                            dhtml.querySelector(name).innerHTML = dhtml.querySelector(name).innerHTML.replace(`{{children}}`, html.querySelector(name).querySelector('slot').innerHTML);
+                            
+                           
+                          
+                        }
+                    }
+                }else{
+                    if (html.querySelector(name).getAttribute(prop)) {
+                       
+                        if(proptemplates.length > 0){
+                            proptemplates.forEach((item) => {
+
+                               if(dhtml.querySelector(name).innerHTML.includes(`{{${prop}}}`)){
+                                 dhtml.querySelector(name).innerHTML = dhtml.querySelector(name).innerHTML.replace(`{{${prop}}}`, html.querySelector(name).getAttribute(prop));
+                              
+                               }
+                            })
+
+                        }
+                        if (dhtml.querySelector(name).innerHTML.includes(`{{${prop}}}`)) {
+                            proptemplates.push({
+                                element: dhtml.querySelector(name),
+                                template: dhtml.querySelector(name).innerHTML,
+                                parent: dhtml.querySelector(name).parentNode ? dhtml.querySelector(name).parentNode : null,
+                            })
+                            
+                            let value = html.querySelector(name).getAttribute(prop);
+                            dhtml.querySelector(name).innerHTML = dhtml.querySelector(name).innerHTML.replace(`{{${prop}}}`, value);
+                        }
+                    }
+                }
+            });
+        }
+    });
+    dhtml.querySelectorAll('*').forEach((element) => {
+
+
+
+
+        let attributes = Object.values(element.attributes);
+
+
+        attributes.forEach((attr) => {
+
+            let attrValue = attr.value;
+
+            if (attrValue.includes('{{')) {
+                let matches = attrValue.match(/{{(.*?)}}/g);
+
+                if (matches) {
+                    matches.forEach((match) => {
+                        let value = match.replace('{{', '').replace('}}', '');
+                        let prop = element.parentNode.getAttribute(value);
+                        let parent = document.querySelector(element.parentNode.tagName);
+                        if (parent && parent.getAttribute(value)) {
+                            prop = parent.getAttribute(value);
+                        }
+                        attrValue = attrValue.replace(new RegExp(`{{${value}}}`, 'g'), prop);
+                    });
+                    element.setAttribute(attr.name, attrValue);
+                }
+            }
+        });
+        let matches = element.innerHTML.match(/{{(.*?)}}/g);
+
+        if (matches) {
+            matches.forEach((match) => {
+
+                let value = match.split('{{')[1].split('}}')[0];
+                let el = dhtml.querySelector(element.tagName);
+                let parent = el.parentNode.tagName;
+                html.querySelectorAll('*').forEach((item) => {
+                    if (item.tagName == parent) {
+                        let prop = item.getAttribute(value);
+                        if (prop) {
+                            if (prop.toString().toLowerCase() == 'true') {
+                                prop = prop.toString().toLowerCase();
+                            }
+                            let attrValue = element.innerHTML.replace(new RegExp(`{{${value}}}`, 'g'), prop);
+                            element.innerHTML = attrValue;
+                        }
+                    }
+                });
+            });
+        }
+        if (element.hasAttribute('state')) {
+            let state = element.getAttribute('state')
+
+
+            element.innerHTML = element.innerHTML + getState(state)
+            if (document.querySelector(element.tagName)) {
+                document.querySelector(element.tagName).innerHTML = element.innerHTML
+            }
+            effect((state), (state) => {
+                if (document.querySelector(element.tagName)) {
+                    document.querySelector(element.tagName).innerHTML = state
+                }
+            })
+        }
+        
+    });
+
+
+
+
+
+
+     
+        
+        exported.forEach(async (exportItem) => {
+       
+            let el = dhtml.querySelector(exportItem) ? dhtml.querySelector(exportItem) :  html.querySelector(exportItem)
+        
+                
+            function waitForElm(selector) {
+                return new Promise(resolve => {
+                    if (document.querySelector(selector)) {
+                        return resolve(document.querySelector(selector));
+                    }
+            
+                    const observer = new MutationObserver(mutations => {
+                        if (document.querySelector(selector)) {
+                            resolve(document.querySelector(selector));
+                            observer.disconnect();
+                        }
+                    });
+            
+                    observer.observe(document.body, {
+                        childList: true,
+                        subtree: true
+                    });
+                });
+            }
+            let elm = await waitForElm(exportItem)
+            
+                 
+           elm.innerHTML = el.innerHTML
+            
+       
+        
+
+    });
+  
+   
+
+
+}
+
 window.Router = Router;
-
-
+window.dox = dox;
  
 
 const states = {};
