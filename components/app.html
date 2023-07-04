@@ -1,67 +1,131 @@
+<import src="./components/button.html" exports="dox-button"></import>
 <import src="./components/nav.html" exports="nav"></import>
 <import src="./components/footer.html" exports="footer"></import>
-<type name="car" constraint="dox:string" isStrict="false"></type>
-<myComponent props="button:text:install" typeof="car" 
->
- <!--- this is my nav-->
+<var name="github_url">
+  https://github.com/MalikWhitten67/html-dox/releases/latest
+</var>
+<var name="github_logo">
+  https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png
+</var>
+<myComponent props="button:text:install:color">
+  <!--- this is my nav-->
   <nav></nav>
- 
-     <div class="relative">
-        <div class="mt-24 flex flex-row">
-             
-            <div class="flex flex-col text-center justify-center mx-auto">
-              <h1 class="text-8xl font-bold">
-                HTML <span class="text-orange-400">DOX</span>
-              </h1>
-              <p class="mt-5 text-center">
-                Fast Lightweight library made to improve your workflow
-              </p>
-              <div class="flex flex-row justify-center mx-auto mt-16 ">
-                <button id="getstartedbtn" class="btn btn-primary w-40 rounded-full">
-                    {{button}}
-                  </button>
-                  <button id="installbtn" class=" btn btn-ghost border-slate-400 hover:bg-slate-700 hover:text-white ml-5 w-40 rounded-full">
-                    {{install}}
-                  </button>
-               </div>
-            </div>
-            
-          </div>
 
-          <div class="flex xl:flex-row mb-24  lg:flex-row flex-col justify-center items-center  mt-16 gap-4">
-            <div class="bg-base-100 flex flex-col   relative text-start p-16 rounded-xl shadow-xl w-96">
-              
-              <span class="font-medium text-lg">
-                💡 Instant render times
-              </span>
-              <span class=" text-gray-500 mt-8 text-md text-start">
-                Sequential render order, no more waiting for your components to load. You can choose the render order as first, last, after, or before!
-              </span>
-            </div>
-            <div class="bg-base-100 flex flex-col    relative text-start p-16 rounded-xl shadow-xl w-96">
+  <div class="mt-16 relative text-white mb-24 ">
+    <div class="  flex  bg-gradient   flex-row">
+
+      <div class="flex flex-col text-center justify-center mx-auto">
+
+        <p class="mt-5 text-6xl text-center max-w-lg mx-auto  text-mono   ">
+          Build Faster SPA's
+        </p>
+        <p class="mt-6 text-xl text-center xl:max-w-2xl  lg:max-w-2xl  mx-auto text-mono   ">
+          Html dox is a extensive library built to enhance how we use html making it more modular and easier to use!
+        </p>
+        <div class="flex flex-row justify-center mx-auto mt-16 ">
+          <button id="getstartedbtn"
+            class="btn bg-white text-black border border-solid border-2 border-gray-600 hover:bg-white hover:scale-200  w-40  rounded-full  ">
+            {{button}}
+          </button>
+
+          <button onclick="my_modal_1.showModal()" id="installbtn"
+            class="{{color}} btn btn-ghost border-slate-400 rounded-full hover:bg-slate-700 hover:text-white ml-5 w-40  ">
+            {{install}}
+          </button>
+
+
+
+
+        </div>
+        <div class=" mb-24 mt-6 flex xl:flex-row  flex-col gap-2 justify-center mx-auto flex-wrap max-w-4xl">
+
+          <div class="card w-96  border-gray-600 border shadow-lg hover:shadow-xl transform hover:scale-105 transition duration-500">
+            <div class="card-body">
+              <h2 class="card-title">🧩 Modular</h2>
+              <p class="text-start"> Html dox is a modular library, adding component based development to html!</p>
                
-                <span class="font-medium text-lg">
-                  🧩 Modular CodeBase
-                </span>
-                <span class=" text-gray-500 mt-8 text-md text-start">
-                 Html Dox is built with modularity in mind, you can import and export components, and even use them as custom elements!
-                </span>
-              </div>
-            
+            </div>
           </div>
-          
-          
+           
+       
+          <div class="card w-96  border-gray-600 border shadow-lg hover:shadow-xl transform hover:scale-105 transition duration-500">
+            <div class="card-body">
+              <h2 class="card-title">⚡️ Performant</h2>
+              <p class="text-start">Html dox renders sequentially, no traversing - no compiling - no bundling!</p>
+               
+            </div>
+          </div>
+          <div class="card w-96  border-gray-600 border shadow-lg hover:shadow-xl transform hover:scale-105 transition duration-500">
+            <div class="card-body">
+              <h2 class="card-title">⚡️ Performant</h2>
+              <p class="text-start">Html dox renders sequentially, unlike dom it is a tree structure, but dox is a list structure!
+                This means it can render on the fly, no traversing - no compiling - no bundling!
+              </p>
+               
 
-   
-   
-</div>
-<footer></footer>
-</div>
-    
+                
+            </div>
+          </div>
+
+          <div class="card w-96  border-gray-600 border shadow-lg hover:shadow-xl transform hover:scale-105 transition duration-500">
+            <div class="card-body">
+              <h2 class="card-title">📚  Easy to use </h2>
+              <p class="text-start">Html dox  does not overcomplicate what has already been done, its not reinventing the wheel just extending base html and vanilla javascript
+                to make your spa csr applications much faster!
+              </p>
+               
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+
+    </div>
+
+
+
+
+
+     <div class="justify-center mx-auto xl:hidden lg:hidden flex"> 
+      Relased under the  <a href="https://opensource.org/license/mit/" class="mx-2 hover:underline hover:text-blue">MIT</a> license
+     </div>
+    <footer class="absolute bottom-0 xl:flex lg:flex hidden"></footer>
+  </div>
  
+
+  <dialog id="my_modal_1" class="modal">
+    <form method="dialog" class="modal-box">
+      <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button>
+      <h3 class="font-bold text-lg">Install Html-dox</h3>
+      <div class="form-control mt-6">
+        <label class="label">
+          <span class="label-text">NPM</span>
+        </label>
+        <input type="text" placeholder="npm install html-dox"
+          class="input focus input-bordered border border-sky-300 rounded w-full" onclick="this.select(), this.focus()"
+          value="npm install html-dox" readonly>
+
+      </div>
+      <div class="form-control mt-6">
+        <label class="label">
+          <span class="label-text">Github
+        </label>
+        <a href="{{github_url}}" target="_blank"
+          class="btn hover:border-slate-300 bg-white w-full text-black border border-solid border-2 border-gray-600 hover:bg-white hover:scale-200   rounded inline flex  ">View
+          on Github <img src="{{github_logo}}" class="w-6 h-6" alt=""></a>
+
+
+      </div>
+
+    </form>
+  </dialog>
+  </div>
+
+
 </myComponent>
-  
-  
+
+
 <export>
-    myComponent
+  myComponent
 </export>

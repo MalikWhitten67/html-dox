@@ -1,9 +1,9 @@
-<!DOCTYPE html>
-<html lang="en" data-theme="winter">
+<!DOCTYPE >
+<html data-theme="halloween"> 
 
 <head>
     <meta charset="UTF-8">
-    <meta config routes="/" fallback="/">
+    <meta config routes="/,/team" fallback="/">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HTML DOX</title>
     <meta name="title" content="HTML DOX">
@@ -16,21 +16,24 @@
     <meta name="language" content="English">
     <meta name="revisit-after" content="1 days">
     <meta name="author" content="Malik Whitten67">
-    <imports>
-
-        ./components/app.html,
-        ./assets/daisy-full.css,
-        ./assets/tailwind.js,
-        ./assets/test.js
-
-    </imports>
+    <script src="./assets/js/tailwind.js" type="module"></script>
+    <link rel="stylesheet" href="./assets/styles/daisy-full.css">
+    <meta imports="./components/app.html,./components/team.html,./assets/js/app.js">
+    <style>
+    
+    </style>
+     
 </head>
 
-<body>
+<body style="overflow-x: hidden;" >
 
-    <render position="first" route="/">
+    <render position="first" route="/"  title="home" >
         <!-- this is ran first-->
         <myComponent text="Sequential Rendering" button="Get Started"  install="Install"></myComponent>
+    </render>
+
+    <render position="last" route="/team" title="team" >
+        <team></team>
     </render>
 
  
