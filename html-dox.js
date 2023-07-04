@@ -39,231 +39,12 @@ let props = sessionStorage.getItem('$dox-props') ? JSON.parse(sessionStorage.get
 
 
 
-
-
-
-class Router {
-    constructor(routes) {
-        this.routes = routes || {};
-        this.currentRoute = '';
-
-        // Attach event listeners to handle hash changes and DOMContentLoaded
-        window.addEventListener('hashchange', () => {
-            this.route();
-        });
-        window.addEventListener('DOMContentLoaded', () => {
-            this.route();
-        });
-
-        this.fallbackRoute = '';
-        this.errorOn = false;
-    }
-
-    route() {
-        const hash = window.location.hash.slice(1); // Remove the "#" character
-        this.currentRoute = hash;
-        this.navigate();
-    }
-
-    render(route) {
-
-        templates.forEach((item) => {
-            let parent = item.parent;
-            let template = item.template;
-            let element = item.element;
-
-            let title = parent.getAttribute('title');
-            if (title) {
-                document.title = title;
-            }
-            if (parent.getAttribute('route') == route) {
-
-                rerender();
-                element.innerHTML = template;
-                window.currentRender = element;
-            } else {
-                element.innerHTML = '';
-            }
-        });
-    }
-
-    navigate() {
-        let matchingRoute = false;
-      
-        if (this.routes) {
-          Object.keys(this.routes).forEach(async (route) => {
-            const { isMatch, params, query, asterisk } = this.isRouteMatch(this.currentRoute, route);
-      
-          
-            if (isMatch) {
-              matchingRoute = true;
-      
-              if (Object.keys(query).length > 0 && window.location.hash.includes('?')) {
-                route = window.location.hash.split('?')[0].replace('#', '');
-                const routeHandler = this.routes[route];
-                this.render(route);
-                await setTimeout(() => {}, 2); // Wait for the DOM to be ready
-                routeHandler({ params, query });
-                window.dox = window.dox || {};
-                return;
-              } else if (Object.keys(params).length > 0 && !window.location.hash.includes('?')) {
-                const routeHandler = this.routes[route];
-                const routeWithoutParams = route.split('/:')[0];
-                // Render the corresponding route
-                this.render(routeWithoutParams);
-      
-                await setTimeout(() => {}, 2); // Wait for the DOM to be ready
-                routeHandler({ params, query });
-      
-                window.dox = window.dox || {};
-      
-                return;
-              } else if (asterisk) {
-               
-                const routeHandler = this.routes[route];
-                const routeWithoutAsterisk =  route.split('/*')[0];
-                console.log(routeWithoutAsterisk)
-                this.render(routeWithoutAsterisk);
-      
-                await setTimeout(() => {}, 2); // Wait for the DOM to be ready
-      
-                // Pass the asterisk value as a parameter to the route handler
-                routeHandler({ asterisk });
-      
-                window.dox = window.dox || {};
-      
-                return;
-              } else {
-                const routeHandler = this.routes[route];
-                this.render(route);
-      
-                await setTimeout(() => {}, 2); // Wait for the DOM to be ready
-                routeHandler({ params, query });
-                window.dox = window.dox || {};
-                return;
-              }
-            }
-          });
-        }
-      
-        if (!matchingRoute && this.fallbackRoute) {
-          window.location.hash = '#' + this.fallbackRoute;
-        }
-      }
-      
-
-      isRouteMatch(route, pattern) {
-        const routeSegments = route.split('/').filter((segment) => segment !== '');
-        const patternSegments = pattern.split('/').filter((segment) => segment !== '');
- 
-        if (routeSegments.length !== patternSegments.length && !pattern.includes('*')) {
-          return { isMatch: false };
-        }
-      
-        const params = {};
-        let query = {};
-        let asterisk = '';
-      
-        for (let i = 0; i < patternSegments.length; i++) {
-          const routeSegment = routeSegments[i];
-          const patternSegment = patternSegments[i];
-      
-          if (patternSegment.startsWith(':')) {
-            const paramName = patternSegment.slice(1);
-            const paramValue = routeSegment;
-            params[paramName] = paramValue;
-          } else if (patternSegment.includes('?')) {
-            const patternSegmentsWithQuery = patternSegment.split('?');
-            const queryStr = patternSegmentsWithQuery[1];
-            query = this.extractQuery(queryStr);
-          } else if (patternSegment.includes('*')) {
-            console.log('patternSegment', patternSegment);
-            // Capture the remaining path after the asterisk
-            asterisk = routeSegments.slice(i).join('/');
-            break;
-          } else if (routeSegment !== patternSegment) {
-            return { isMatch: false };
-          }
-        }
-      
-        return { isMatch: true, params, query, asterisk };
-      }
-      
-      
-
-    // Rest of the code remains the same
-
-
  
 
 
-    get(route, handler) {
-        this.routes[route] = handler;
-    }
-
-    redirect(route) {
-        window.location.hash = '#' + route;
-    }
-
-    extractParams(route, pattern) {
-        const routeSegments = route.split('/').filter((segment) => segment !== '');
-        const patternSegments = pattern.split('/').filter((segment) => segment !== '');
-        const params = {};
-
-        for (let i = 0; i < patternSegments.length; i++) {
-            const patternSegment = patternSegments[i];
-
-            if (patternSegment.startsWith(':')) {
-                const paramName = patternSegment.slice(1);
-                const paramValue = routeSegments[i];
-                params[paramName] = paramValue;
-            }
-        }
-
-        return params;
-    }
-    extractQuery(route) {
-        const queryIndex = route.indexOf('?');
-        if (queryIndex !== -1) {
-            const queryStr = route.slice(queryIndex + 1);
-            const queryPairs = queryStr.split('&');
-            const query = {};
-
-            queryPairs.forEach((pair) => {
-                const [key, value] = pair.split('=');
-                query[key] = decodeURIComponent(value); // Decode URI component to handle special characters
-            });
-
-            return query;
-        }
-
-        return {};
-    }
-    extractAsterics(route) {
-        const queryIndex = route.indexOf('*');
-        // /route/* - returns /route/anything/here/anything/here
-        if (queryIndex !== -1) {
-            const queryStr = route.slice(queryIndex + 1);
-            const queryPairs = queryStr.split('&');
-            const query = {};
-
-            queryPairs.forEach((pair) => {
-                const [key, value] = pair.split('=');
-                query[key] = decodeURIComponent(value); // Decode URI component to handle special characters
-            });
-
-            return query;
-        }
-    }
-
-}
-
-window.Router = Router;
 
 
-
-
-const parser = (data) => {
+const parser = async (data) => {
     let dom = new DOMParser();
     let html = dom.parseFromString(data, 'text/html');
     html = html.querySelector('html');
@@ -343,17 +124,59 @@ const parser = (data) => {
             item.remove();
             return;
         });
+        let proptemplates =[]
         dhtml.querySelectorAll('[props]').forEach((item) => {
+            
             let name = item.tagName;
             if (html.querySelector(name)) {
                 let $props = item.getAttribute('props').split(':');
                 $props.forEach((prop) => {
                     props[name] = $props;
-                    sessionStorage.setItem('$dox-props', JSON.stringify(props));
+                    sessionStorage.setItem('$dox-props', JSON.stringify(props))
+                     
                     if (prop == 'children') {
                         if (html.querySelector(name).querySelector('slot')) {
                             if (dhtml.querySelector(name).innerHTML.includes('{{children}}')) {
+                                if(proptemplates.length > 0){
+                                    proptemplates.forEach((item) => {
+                                       if(item.parent == dhtml.querySelector(name).parentNode){
+                                        dhtml.querySelector(name).innerHTML = item.template
+                                       }
+                                    })
+
+                                }
+                                proptemplates.push({
+                                    element: dhtml.querySelector(name),
+                                    template: dhtml.querySelector(name).innerHTML,
+                                    parent: dhtml.querySelector(name).parentNode ? dhtml.querySelector(name).parentNode : null,
+                                })
+                                
                                 dhtml.querySelector(name).innerHTML = dhtml.querySelector(name).innerHTML.replace('{{children}}', html.querySelector(name).querySelector('slot').innerHTML);
+                              
+                            }
+                        }
+                    }else{
+                        if (html.querySelector(name).getAttribute(prop)) {
+                           
+                            if(proptemplates.length > 0){
+                                proptemplates.forEach((item) => {
+
+                                   if(dhtml.querySelector(name).innerHTML.includes(`{{${prop}}}`)){
+                                     dhtml.querySelector(name).innerHTML = dhtml.querySelector(name).innerHTML.replace(`{{${prop}}}`, html.querySelector(name).getAttribute(prop));
+                                  
+                                   }
+                                })
+
+                            }
+                            if (dhtml.querySelector(name).innerHTML.includes(`{{${prop}}}`)) {
+                                proptemplates.push({
+                                    element: dhtml.querySelector(name),
+                                    template: dhtml.querySelector(name).innerHTML,
+                                    parent: dhtml.querySelector(name).parentNode ? dhtml.querySelector(name).parentNode : null,
+                                })
+                                
+                                let value = html.querySelector(name).getAttribute(prop);
+                                dhtml.querySelector(name).innerHTML = dhtml.querySelector(name).innerHTML.replace(`{{${prop}}}`, value);
                             }
                         }
                     }
@@ -506,7 +329,7 @@ const parser = (data) => {
 
 
 
-        _export.forEach((item) => {
+        _export.forEach(async (item) => {
 
 
             let template = html.querySelector(item);
@@ -607,7 +430,7 @@ const parser = (data) => {
 
                 $props.forEach((prop) => {
 
-
+ 
                     props[item] = $props
                     sessionStorage.setItem('$dox-props', JSON.stringify(props))
 
@@ -620,41 +443,50 @@ const parser = (data) => {
                             subitem.innerHTML = subitem.innerHTML.replace(`{{${attr}}}`, derivedvalue);
                         }
                     });
-
-                    let propElements = template.innerHTML.split('{{');
-
-                    propElements.forEach((element) => {
-                        let prop = element.split('}}')[0];
-
-                        if (template.innerHTML.includes(`{{${prop}}}`)) {
-                            template.innerHTML = template.innerHTML.replace(`{{${prop}}}`, body.querySelector(item).getAttribute(prop));
+ 
+                    if (prop == 'children') {
+                        if (html.querySelector(item).querySelector('slot')) {
+                            if (html.querySelector(item).innerHTML.includes('{{children}}')) {
+                                let value = html.querySelector(item).querySelector('slot').innerHTML;
+                                html.querySelector(item).innerHTML = html.querySelector(item).innerHTML.replace('{{children}}', value);
+                            }
                         }
-
-                    })
-                    if (template.innerHTML.includes(`{{${prop}}}`)) {
-
-                        // replace {{prop}} with the value of the prop
-                        template.innerHTML = template.innerHTML.replace(`{{${prop}}}`, body.querySelector(item).getAttribute(prop));
                     }
+                    else {
+                        if (html.querySelector(item).getAttribute(prop)) {
+                            if (html.querySelector(item).innerHTML.includes(`{{${prop}}}`)) {
+                                let value = html.querySelector(item).getAttribute(prop);
+                                html.querySelector(item).innerHTML = html.querySelector(item).innerHTML.replace(`{{${prop}}}`, value);
+                            }
+                        }
+                    }
+
                 });
             }
 
-            templates.push({
-                element: document.querySelector(item),
-                template: template.innerHTML,
-                parent: document.querySelector(item).parentNode,
-                html: html,
-                body: body
-            });
+         
+           
+                if(document.querySelector(item)){
+                    let el = html.querySelector(item)
+                    body.querySelector(item).innerHTML = el.innerHTML
+                    templates.push({
+                        element: document.querySelector(item),
+                        parent: document.querySelector(item).parentNode,
+                        template: template.innerHTML,
+                        html:  html,
+                        body: body
+                    });
+                } 
+                rerender()
+           
 
 
             function rerender(blocked) {
 
 
-                let element = document.querySelector(item)
+                let element = html.querySelector(item);
                 if (element) {
 
-                    document.querySelector(element.tagName).innerHTML = element.innerHTML;
                     let modules = html.querySelectorAll('import')
 
                     modules.forEach((item) => {
@@ -812,6 +644,13 @@ const parser = (data) => {
                         return methods(element);
                     });
                 };
+                element.setProp = (prop, value) => {
+                    if(value){
+                        html.querySelector(element.tagName).setAttribute(prop, value)
+                        rerender()
+                        return methods(element)
+                    }
+                }
                 element.css = (prop, value) => {
                     if (value) {
                         element.style[prop] = value;
@@ -871,6 +710,15 @@ const parser = (data) => {
                 },
                 currentRender: () => {
                     return currentRender
+                },
+                setProp: (element, prop, value) => {
+                    // check if element is inside of <render> tag
+                    let el = html.querySelector(element)
+                    if (el) {
+                        el.setAttribute(prop, value)
+                        rerender()
+                    }
+                    return methods(el)
                 },
                 domChange: (type, eventive = false, callback = () => { }) => {
 
@@ -1111,9 +959,7 @@ const parser = (data) => {
 
 
             }
-            dox.domChange('changed', (mutation) => {
-                window.hasChanged = true
-            })
+           
             window.dox = dox;
 
 
@@ -1302,6 +1148,221 @@ const parser = (data) => {
 
 
 
+class Router {
+    constructor(routes) {
+        this.routes = routes || {};
+        this.currentRoute = '';
+
+        // Attach event listeners to handle hash changes and DOMContentLoaded
+        window.addEventListener('hashchange', () => {
+            this.route();
+        });
+        window.addEventListener('DOMContentLoaded', () => {
+            this.route();
+        });
+
+        this.fallbackRoute = '';
+        this.errorOn = false;
+    }
+
+    route() {
+        const hash = window.location.hash.slice(1); // Remove the "#" character
+        this.currentRoute = hash;
+        this.navigate();
+    }
+
+    render(route) {
+       
+
+        templates.forEach((item) => {
+             
+            let parent = item.parent;
+            let template = item.template;
+            let element = item.element;
+ 
+            if (parent.getAttribute('route') == route) {
+
+                rerender();
+                element.innerHTML = template;
+                window.currentRender = element;
+            } else {
+                element.innerHTML = '';
+            }
+        });
+    }
+
+    navigate() {
+        let matchingRoute = false;
+      
+        if (this.routes) {
+          Object.keys(this.routes).forEach(async (route) => {
+            const { isMatch, params, query, asterisk } = this.isRouteMatch(this.currentRoute, route);
+      
+          
+            if (isMatch) {
+              matchingRoute = true;
+      
+              if (Object.keys(query).length > 0 && window.location.hash.includes('?')) {
+                route = window.location.hash.split('?')[0].replace('#', '');
+                const routeHandler = this.routes[route];
+                this.render(route);
+                await setTimeout(() => {}, 2); // Wait for the DOM to be ready
+                routeHandler({ params, query });
+                window.dox = window.dox || {};
+                return;
+              } else if (Object.keys(params).length > 0 && !window.location.hash.includes('?')) {
+                const routeHandler = this.routes[route];
+                const routeWithoutParams = route.split('/:')[0];
+                // Render the corresponding route
+                this.render(routeWithoutParams);
+      
+                await setTimeout(() => {}, 2); // Wait for the DOM to be ready
+                routeHandler({ params, query });
+      
+                window.dox = window.dox || {};
+      
+                return;
+              } else if (asterisk) {
+               
+                const routeHandler = this.routes[route];
+                const routeWithoutAsterisk =  route.split('/*')[0];
+                this.render(routeWithoutAsterisk);
+                window.dox = window.dox || {};
+                await setTimeout(() => {}, 2); // Wait for the DOM to be ready
+      
+                // Pass the asterisk value as a parameter to the route handler
+                routeHandler({ asterisk });
+      
+                
+      
+                return;
+              } else {
+                const routeHandler = this.routes[route];
+                this.render(route);
+          
+                await setTimeout(() => {
+                    routeHandler({ params, query }); 
+                }, 2); // Wait for the DOM to be ready
+            
+             
+                window.dox = window.dox || {};
+                return;
+              }
+            }
+          });
+        }
+      
+        if (!matchingRoute && this.fallbackRoute) {
+          window.location.hash = '#' + this.fallbackRoute;
+        }
+      }
+      
+
+      isRouteMatch(route, pattern) {
+        const routeSegments = route.split('/').filter((segment) => segment !== '');
+        const patternSegments = pattern.split('/').filter((segment) => segment !== '');
+  
+        if (routeSegments.length !== patternSegments.length && !pattern.includes('*')) {
+          return { isMatch: false };
+        }
+      
+        const params = {};
+        let query = {};
+        let asterisk = '';
+      
+        for (let i = 0; i < patternSegments.length; i++) {
+          const routeSegment = routeSegments[i];
+          const patternSegment = patternSegments[i];
+      
+          if (patternSegment.startsWith(':')) {
+            const paramName = patternSegment.slice(1);
+            const paramValue = routeSegment;
+            params[paramName] = paramValue;
+          } else if (patternSegment.includes('?')) {
+            const patternSegmentsWithQuery = patternSegment.split('?');
+            const queryStr = patternSegmentsWithQuery[1];
+            query = this.extractQuery(queryStr);
+          } else if (patternSegment.includes('*')) {
+            // Capture the remaining path after the asterisk
+            asterisk = routeSegments.slice(i).join('/');
+            break;
+          } else if (routeSegment !== patternSegment) {
+            return { isMatch: false };
+          }
+        }
+      
+        return { isMatch: true, params, query, asterisk };
+      }
+      
+      
+
+    // Rest of the code remains the same
+
+
+ 
+
+
+    get(route, handler) {
+        this.routes[route] = handler;
+    }
+
+    redirect(route) {
+        window.location.hash = '#' + route;
+    }
+
+    extractParams(route, pattern) {
+        const routeSegments = route.split('/').filter((segment) => segment !== '');
+        const patternSegments = pattern.split('/').filter((segment) => segment !== '');
+        const params = {};
+
+        for (let i = 0; i < patternSegments.length; i++) {
+            const patternSegment = patternSegments[i];
+
+            if (patternSegment.startsWith(':')) {
+                const paramName = patternSegment.slice(1);
+                const paramValue = routeSegments[i];
+                params[paramName] = paramValue;
+            }
+        }
+
+        return params;
+    }
+    extractQuery(route) {
+        const queryIndex = route.indexOf('?');
+        if (queryIndex !== -1) {
+            const queryStr = route.slice(queryIndex + 1);
+            const queryPairs = queryStr.split('&');
+            const query = {};
+
+            queryPairs.forEach((pair) => {
+                const [key, value] = pair.split('=');
+                query[key] = decodeURIComponent(value); // Decode URI component to handle special characters
+            });
+
+            return query;
+        }
+
+        return {};
+    }
+    extractAsterics(route) {
+        const queryIndex = route.indexOf('*');
+        // /route/* - returns /route/anything/here/anything/here
+        if (queryIndex !== -1) {
+            const queryStr = route.slice(queryIndex + 1);
+            const queryPairs = queryStr.split('&');
+            const query = {};
+
+            queryPairs.forEach((pair) => {
+                const [key, value] = pair.split('=');
+                query[key] = decodeURIComponent(value); // Decode URI component to handle special characters
+            });
+
+            return query;
+        }
+    }
+
+}
+
 imports.map((item) => {
     if (!item.endsWith('.html') && !item.endsWith('.css') && !item.endsWith('.js')) {
         throw new Error('Unsupported imported file type!');
@@ -1333,23 +1394,8 @@ imports.map((item) => {
                             pscript.type = 'module'
                             pscript.innerHTML = data
                             document.head.appendChild(pscript)
-
-                            dox.domChange('changed', (mutation) => {
-
-                                if (document.querySelector('#dox-script')) {
-                                    document.querySelector('#dox-script').remove()
-                                    let script = document.createElement('script')
-
-
-                                    script.id = 'dox-script'
-                                    script.type = 'module'
-                                    script.innerHTML = data
-
-                                    document.head.appendChild(script)
-
-                                }
-                            })
-
+ 
+                             
 
                   
 
@@ -1378,13 +1424,17 @@ imports.map((item) => {
                 .then((response) => {
                     return response.text();
                 })
-                .then((data) => {
+                .then(async (data) => {
                     cache[item] = data;
-                    parser(data);
+                    await parser(data);
                 });
         }
     }
 });
+window.Router = Router;
+
+
+ 
 
 const states = {};
 
@@ -1420,7 +1470,7 @@ window.effect = effect
 window.getState = getState
 
 window.setState = setState
-
+window.dox = dox;
 
 
 export default dox;
