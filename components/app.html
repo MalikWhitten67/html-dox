@@ -7,9 +7,32 @@
 <var name="github_logo">
   https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png
 </var>
+<var name="someJson"   >
+  [
+   {
+     "name": "Malik",
+     "age": 17,
+     "location": "USA"
+   },
+   {
+     "name": "John",
+     "age": 18,
+     "location": "USA"
+   },
+   {
+     "name": "Jane",
+     "age": 19,
+     "location": "USA"
+   }]
+  
+ </var>
 <myComponent props="button:text:install:color">
   <!--- this is my nav-->
-  <nav></nav>
+  <nav>
+    <slot>
+      <p class="">hello</p>
+    </slot>
+  </nav>
 
   <div class="mt-16 relative text-white mb-24 ">
     <div class="  flex  bg-gradient   flex-row">
@@ -18,15 +41,23 @@
 
         <p class="mt-5 text-6xl text-center max-w-lg mx-auto  text-mono   ">
           Build Faster SPA's
+          <span>
+            {{json.map(someJson.age.filter(age => age > 18).return('li'))}}
+            {{somejson}}
+          </span>
+          
         </p>
         <p class="mt-6 text-xl text-center xl:max-w-2xl  lg:max-w-2xl  mx-auto text-mono   ">
           Html dox is a extensive library built to enhance how we use html making it more modular and easier to use!
         </p>
         <div class="flex flex-row justify-center mx-auto mt-16 ">
-          <button id="getstartedbtn"
+          <a href="https://github.com/MalikWhitten67/html-dox/wiki/Getting-started">
+            <button id="getstartedbtn"
             class="btn bg-white text-black border border-solid border-2 border-gray-600 hover:bg-white hover:scale-200  w-40  rounded-full  ">
             {{button}}
           </button>
+          </a>
+       
 
           <button onclick="my_modal_1.showModal()" id="installbtn"
             class="{{color}} btn btn-ghost border-slate-400 rounded-full hover:bg-slate-700 hover:text-white ml-5 w-40  ">
@@ -55,17 +86,7 @@
                
             </div>
           </div>
-          <div class="card w-96  border-gray-600 border shadow-lg hover:shadow-xl transform hover:scale-105 transition duration-500">
-            <div class="card-body">
-              <h2 class="card-title">⚡️ Performant</h2>
-              <p class="text-start">Html dox renders sequentially, unlike dom it is a tree structure, but dox is a list structure!
-                This means it can render on the fly, no traversing - no compiling - no bundling!
-              </p>
-               
-
-                
-            </div>
-          </div>
+          
 
           <div class="card w-96  border-gray-600 border shadow-lg hover:shadow-xl transform hover:scale-105 transition duration-500">
             <div class="card-body">

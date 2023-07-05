@@ -1,28 +1,31 @@
 <var name="github_url">
   https://github.com/MalikWhitten67/html-dox/releases/latest
 </var>
-<nav class="w-screen ">
+<var name="whydox">
+https://github.com/MalikWhitten67/html-dox/wiki/Why-Dox%3F
+</var>
+ 
+<nav class="w-screen " props="children">
   <div class="navbar  text-white   border text-mono  shadow-sm border-[#3c3737]"
   >
     <div class="flex-1">
       <a class="btn btn-ghost normal-case text-xl  font-bold text-white">
         <img src="./assets/logo.svg"  class="w-8 h-8" alt=""> Html-dox
+       
       </a>
     </div>
     <div class="flex-none">
-      <ul class="menu menu-horizontal bg-base-100 ">
-        <li>
-          <details>
-            <summary>
-              <a>Docs</a>
-            </summary>
-            <ul class="p-2 bg-base-300">
-              <li><a>Link 1</a></li>
-              <li><a>Link 2</a></li>
-            </ul>
-          </details>
-        </li>
-      </ul>
+       <a href="{{whydox}}"
+       class="btn btn-info btn-sm hover:border-1 hover:border-white border-double "
+       >Why Dox?</a> 
+       <div class="dropdown dropdown-end">
+        <label tabindex="0" class="m-1 btn btn-ghost btn-sm rounded-btn">Docs</label>
+        <ul tabindex="0" class="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-52">
+          <li><a href="https://github.com/MalikWhitten67/html-dox/wiki/Getting-started#creating-a-component">Creating a Component</a></li>
+          <li></li>
+        </ul>
+      </div>
+      
     </div>
   </div>
  
@@ -35,6 +38,7 @@
  
  
  <export>
+    var:github_url 
     nav
 </export>
  
