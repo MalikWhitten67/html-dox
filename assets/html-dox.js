@@ -1,22 +1,22 @@
 let dox;
 let currentRender;
 let templates = [];
-let importsTag = document.querySelector('imports')   
+let importsTag = document.querySelector('imports')
 let importmeta = document.querySelector('[imports]')
 // remove whitespace
 let imports;
-if(importmeta){
-  imports = importmeta.getAttribute('imports').replace(/\s/g, '')
-}else if(importsTag){
+if (importmeta) {
+    imports = importmeta.getAttribute('imports').replace(/\s/g, '')
+} else if (importsTag) {
     throw new Error('<imports> is deprecated use <meta imports="/someimport,/someimport"> instead! read latest git release for more info: https://github.com/MalikWhitten67/html-dox/releases/latest')
 }
- 
+
 imports = imports.split(',')
 // remove empty strings
 imports = imports.filter(Boolean)
 
 let cache = {}
- 
+
 let types = []
 // constraint types - for type checking
 
@@ -39,7 +39,7 @@ let props = sessionStorage.getItem('$dox-props') ? JSON.parse(sessionStorage.get
 
 
 
- 
+
 
 
 
@@ -49,8 +49,8 @@ const parser = async (data) => {
     let html = dom.parseFromString(data, 'text/html');
     html = html.body
     let body = document.body
-  
-   
+
+
     let imports = html.querySelectorAll('import');
 
     imports.forEach((item) => {
@@ -79,42 +79,94 @@ const parser = async (data) => {
         }
 
     });
-  
 
-  
+
+
 
     let _export = html.querySelector('export');
+
     _export.style.display = 'none';
     let _vars = html.querySelectorAll('var');
 
     _vars.forEach((item) => {
+        console.log(item)
+
 
         item.style.display = 'none';
         let varName = item.getAttribute('name');
         let varValue = item.innerHTML;
+        window[varName] = varValue;
+        if (item.html) {
+            window[varName + 'Element'] = item;
+        } else {
+            window[varName + 'Element'] = item;
+        }
+
+
+        if (item.hasAttribute('state')) {
+            let state = item.getAttribute('state')
+
+            if (getState(state) == undefined || getState(state) == null) {
+                setState(state, '')
+            }
+            effect((state), (statev) => {
+                setTimeout(() => {
+                    item.innerHTML = statev
+                }, 0)
+            })
+        }
         html.querySelectorAll('*').forEach((element) => {
             let matches = element.innerHTML.match(/{{(.*?)}}/g);
             let attrmatches = element.outerHTML.match(/{{(.*?)}}/g);
+            let original = element.innerHTML;
             // check if attribute has {{}}
             if (attrmatches) {
                 attrmatches.forEach((match) => {
                     let attr = match.split('{{')[1].split('}}')[0];
-                     // check if it is from a var
+                    // check if it is from a var
                     if (attr == varName) {
-                        if(element.parentNode){
+                        if (element.parentNode) {
                             element.outerHTML = element.outerHTML.replace(match, varValue)
                         }
                     }
                 });
-            }else 
-            if (matches && element.innerHTML.includes(`{{${varName}}}`)) {
-                matches.forEach((match) => {
-                    element.innerHTML = element.innerHTML.replace(match, varValue)
-                });
-            }
+            } else
+                if (matches && element.innerHTML.includes(`{{${varName}}}`)) {
+
+
+                    matches.forEach((match) => {
+
+                        window.onmessage = (e) => {
+                            if (e.origin == window.location.origin && e.data.type == 'setVar') {
+                                let name = e.data.name
+                                let value = e.data.value
+                                if (item.getAttribute('name') == name) {
+                                    window[name] = value
+                                    item.innerHTML = value
+                                }
+
+                            }
+                        }
+                        element.innerHTML = element.innerHTML.replace(match, JSON.parse(item.innerHTML))
+                    });
+                } else {
+                    window.onmessage = (e) => {
+                        if (e.origin == window.location.origin && e.data.type == 'setVar') {
+                            let name = e.data.name
+                            let value = e.data.value
+                            if (item.getAttribute('name') == name) {
+                                window[name] = value
+                                item.innerHTML = value
+                            }
+
+                        }
+                    }
+                }
+
 
         });
-        item.remove();
+
+
         return;
     })
     if (_export) {
@@ -128,216 +180,15 @@ const parser = async (data) => {
         _export.forEach(async (item) => {
 
 
-            let template = html.querySelector(item);
-
-
-
-
-            let attributes = [];
-
-
-
-            attributes.forEach((attribute) => {
-                if (template.hasAttribute(attribute)) {
-                    if (attribute === 'typeof') {
-
-                        let type = types.find((type) => type.name === template.getAttribute(attribute));
-
-                        if (type) {
-                            let constraintType = contraintTypes[type.constraint];
-                            let value = body.querySelector(item).innerHTML;
-                            let convertedValue;
-
-                            if (type.isStrict === 'false') {
-                                return;
-                            }
-
-                            if (constraintType === Number) {
-                                convertedValue = Number(value);
-                                convertedValue = isNaN(convertedValue) ? 0 : convertedValue;
-                                if (convertedValue === 0) {
-                                    throw new Error(`Invalid value for type "${type.name}": ${value} (expected number)`);
-                                }
-                            } else if (constraintType === Boolean) {
-                                if (value.toLowerCase() === 'true') {
-                                    convertedValue = true;
-                                } else if (value.toLowerCase() === 'false') {
-                                    convertedValue = false;
-                                } else {
-                                    throw new Error(`Invalid value for type "${type.name}": ${value} (expected boolean)`);
-                                }
-                            } else if (constraintType === String) {
-                                convertedValue = value;
-                            } else {
-                                throw new Error(`Invalid constraint type for type "${type.name}": ${type.constraint}`);
-                            }
-                        } else {
-                            throw new Error(`Type "${template.getAttribute(attribute)}" does not exist`);
-                        }
-                    }
-                }
-            });
-
-
-
-            let onchangeInputs = {
-                'input': true,
-                'textarea': true,
-                'select': true,
-            }
-
-            html.querySelectorAll('[state]').forEach((element) => {
-                let state = element.getAttribute('state')
-
-                element.id = state
-                if (getState(state) == undefined || getState(state) == null) {
-                    setState(state, '')
-                }
-                element.innerHTML = element.innerHTML + getState(state)
-
-                setTimeout(() => {
-                    effect((state), (statev) => {
-
-                        setTimeout(() => {
-                            if (element.tagName == 'INPUT' || element.tagName == 'TEXTAREA') element.value = statev;
-                            if (element.tagName == 'SELECT') element.value = statev;
-                            if (element.tagName == 'IMG') element.src = statev;
-                            if (element.tagName == 'A') element.href = statev;
-                            if (element.tagName == 'IFRAME') element.src = statev;
-                            if (element.tagName == 'VIDEO') element.src = statev;
-                            if (element.tagName == 'AUDIO') element.src = statev;
-                            if (element.tagName == 'EMBED') element.src = statev;
-                            if (element.tagName == 'OBJECT') element.src = statev;
-                            if (element.tagName == 'SOURCE') element.src = statev;
-                            if (element.tagName == 'TRACK') element.src = statev;
-                            else element.innerHTML = statev;
-                            document.querySelector(`#${state}`).innerHTML = statev
-                        }, 0)
-                    })
-                }, 0)
-            })
-
-
-            window.rerender = rerender
-
-
-            if (html.querySelector(item).hasAttribute('props')) {
-                let el = html.querySelector(item)
-                 
-                let $props = html.querySelector(item).getAttribute('props').split(':');
-
-
-                $props.forEach((prop) => {
- 
- 
-                    
-                    props[item] = $props
-                    sessionStorage.setItem('$dox-props', JSON.stringify(props))
-
-                    let derivatives = template.querySelectorAll('[derive]');
-                    derivatives.forEach((subitem) => {
-                        let attr = subitem.getAttribute('derive');
-                        let derivedvalue = body.querySelector(item).getAttribute(attr);
-
-                        if (subitem.innerHTML.includes(`{{${attr}}}`)) {
-                            subitem.innerHTML = subitem.innerHTML.replace(`{{${attr}}}`, derivedvalue);
-                        }
-                    });
- 
-                    if (prop == 'children') {
-                        if (html.querySelector(item).querySelector('slot')) {
-                            if (html.querySelector(item).innerHTML.includes('{{children}}')) {
-                                let value = html.querySelector(item).querySelector('slot').innerHTML;
-                                html.querySelector(item).innerHTML = html.querySelector(item).innerHTML.replace('{{children}}', value);
-                            }
-                        }
-                    }
-                    else {
-                        
-                        if (body.querySelector(item).getAttribute(prop)) {
-                             
-                          html.querySelector(item).innerHTML = html.querySelector(item).innerHTML.replace(`{{${prop}}}`, body.querySelector(item).getAttribute(prop));
-                        }
-                    }
-
-                });
-            }
-
-         
-           
-                if(document.querySelector(item)){
-                    
-                    templates.push({
-                        element: document.querySelector(item),
-                        parent: document.querySelector(item).parentNode,
-                        template: template.innerHTML,
-                        html:  html,
-                        body: body
-                    });
-                } 
-                rerender()
-           
-
-
-            function rerender(ele) {
-
-
-                let element = html.querySelector(item);
-                if (element) {
-
-                    let modules = html.querySelectorAll('import')
-
-                    modules.forEach(async (item) => {
-                        let file = item.getAttribute('src');
-
-                        if (!file.endsWith('.html')) {
-                            throw new Error('Unsupported imported file type!');
-                        }
-
-                        if (!window[file]) {
-
-
-                            fetch(file)
-                                .then((response) => {
-                                    return response.text();
-                                })
-                                .then(async (data) => {
-
-                                    await setTimeout(() => {}, 0)
-                                    window[file] = data
-                                    setData(data, html, document.body, item)
-                                })
-                            return;
-
-                        } else {
-
-                            await setTimeout(() => {}, 0)
-                            setData(window[file], html, document.body, item)
-                        }
-
-                    });
-                }
-                
-
-            }
-
             function methods(element) {
-                    
-           
-             
+
+
+
                 element.inject = (code) => {
                     element.innerHTML = code;
                     return methods(element);
                 };
-                 
-                if(element.isActive == true){
-                  
-                   if(!element.setProp){
-                    element.setProp = (prop, value) => {
-                        console.log(element)
-                    }
-                   }
-                }
+
                 let props = sessionStorage.getItem('$dox-props') ? JSON.parse(sessionStorage.getItem('$dox-props')) : [];
                 props = props[element.tagName];
                 if (props) {
@@ -458,8 +309,8 @@ const parser = async (data) => {
                     });
                 };
                 element.setProp = (prop, value) => {
-                    
-                    if(value){
+
+                    if (value) {
                         html.querySelector(element.tagName).setAttribute(prop, value)
                         rerender()
                         return methods(element)
@@ -526,23 +377,33 @@ const parser = async (data) => {
                     return currentRender
                 },
                 setProp: (element, prop, value) => {
-                   
+
                     let el = html.querySelector(element)
-                    console.log(el)
+
                     if (el) {
                         el.setAttribute(prop, value)
                         rerender()
                     }
                     return methods(el)
                 },
-                current: () =>{
+                setVar: (name, value) => {
+                    window[name] = value
+                    window.postMessage({
+                        type: 'setVar',
+                        name: name,
+                        value: value
+                    }, window.location.origin)
+
+
+                },
+                current: () => {
                     // check if this fucntion is inside of a attribute like <button onclick="dox.current()">
 
                     let element = document.activeElement
-                     
-                    if(element){
-                         element.isActive = true
-                         return methods(element)
+
+                    if (element) {
+                        element.isActive = true
+                        return methods(element)
                     }
                 },
                 domChange: (type, eventive = false, callback = () => { }) => {
@@ -784,8 +645,327 @@ const parser = async (data) => {
 
 
             }
-           
+
             window.dox = dox;
+            let template = html.querySelector(item);
+
+
+
+
+            let attributes = [];
+
+
+
+            attributes.forEach((attribute) => {
+                if (template.hasAttribute(attribute)) {
+                    if (attribute === 'typeof') {
+
+                        let type = types.find((type) => type.name === template.getAttribute(attribute));
+
+                        if (type) {
+                            let constraintType = contraintTypes[type.constraint];
+                            let value = body.querySelector(item).innerHTML;
+                            let convertedValue;
+
+                            if (type.isStrict === 'false') {
+                                return;
+                            }
+
+                            if (constraintType === Number) {
+                                convertedValue = Number(value);
+                                convertedValue = isNaN(convertedValue) ? 0 : convertedValue;
+                                if (convertedValue === 0) {
+                                    throw new Error(`Invalid value for type "${type.name}": ${value} (expected number)`);
+                                }
+                            } else if (constraintType === Boolean) {
+                                if (value.toLowerCase() === 'true') {
+                                    convertedValue = true;
+                                } else if (value.toLowerCase() === 'false') {
+                                    convertedValue = false;
+                                } else {
+                                    throw new Error(`Invalid value for type "${type.name}": ${value} (expected boolean)`);
+                                }
+                            } else if (constraintType === String) {
+                                convertedValue = value;
+                            } else {
+                                throw new Error(`Invalid constraint type for type "${type.name}": ${type.constraint}`);
+                            }
+                        } else {
+                            throw new Error(`Type "${template.getAttribute(attribute)}" does not exist`);
+                        }
+                    }
+                }
+            });
+
+
+
+            let onchangeInputs = {
+                'input': true,
+                'textarea': true,
+                'select': true,
+            }
+
+            html.querySelectorAll('[state]').forEach((element) => {
+                let state = element.getAttribute('state')
+                console.log(state)
+                element.id = state
+                if (getState(state) == undefined || getState(state) == null) {
+                    setState(state, '')
+                }
+                element.innerHTML = element.innerHTML + getState(state)
+
+                setTimeout(() => {
+                    effect((state), (statev) => {
+
+                        console.log(statev)
+                        setTimeout(() => {
+                            if (element.tagName == 'INPUT' || element.tagName == 'TEXTAREA') element.value = statev;
+                            if (element.tagName == 'SELECT') element.value = statev;
+                            if (element.tagName == 'IMG') element.src = statev;
+                            if (element.tagName == 'A') element.href = statev;
+                            if (element.tagName == 'IFRAME') element.src = statev;
+                            if (element.tagName == 'VIDEO') element.src = statev;
+                            if (element.tagName == 'AUDIO') element.src = statev;
+                            if (element.tagName == 'EMBED') element.src = statev;
+                            if (element.tagName == 'OBJECT') element.src = statev;
+                            if (element.tagName == 'SOURCE') element.src = statev;
+                            if (element.tagName == 'TRACK') element.src = statev;
+                            else element.innerHTML = statev;
+                            document.querySelector(`#${state}`).innerHTML = statev
+                        }, 0)
+                    })
+                }, 0)
+            })
+            html.querySelectorAll('*').forEach(async (element) => {
+                // check if element has {{json.map(varName).return('li')}}
+                if (element.innerHTML.includes('{{')) {
+                    let matches = element.innerHTML.match(/{{(.*?)}}/g);
+                    let original = element.innerHTML;
+                    // if 
+                    if (matches) {
+                        let val = matches[0].split('{{')[1].split('}}')[0];
+
+
+                        if (val.includes('json.map(')) {
+                            let json = val.split('json.map(')[1].split(')')[0];
+                            // value return is like json.map(varName.name).return('li')
+                            // get varName.name
+                            let dotvalue = val.split('json.map(')[1].split(')')[0].split('.')[1];
+                            json = val.split('json.map(')[1].split(')')[0].split('.')[0];
+
+
+                            if (window[json] || window[json + 'Element']) {
+
+                                if (val.includes('return')) {
+
+                                    function setData(html) {
+                                        window[json] = JSON.parse(window[json])
+                                        console.log(window[json])
+                                        element = html
+                                        let container = document.createElement('div');
+                                        let returnVal = val.split('return(')[1].split(')')[0].replace(/'/g, '');
+                                        let parsed;
+                                        try {
+                                            parsed = JSON.parse(window[json])
+                                        }
+                                        catch (e) {
+                                            console.log(e)
+                                        }
+                                        parsed.forEach((item) => {
+                                            let newel;
+                                            if (returnVal.includes('[')) {
+                                                let elname = returnVal.split('[')[0];
+                                                let attr = returnVal.split('[')[1].split(']')[0];
+                                                let value = attr.split('=')[1].replace(/'/g, '').replace(/"/g, '');
+                                                let attrname = attr.split('=')[0];
+                                                newel = document.createElement(elname);
+                                                newel.setAttribute(attrname, value);
+                                            } else if (returnVal.includes('.')) {
+                                                newel = document.createElement(returnVal.split('.')[0]);
+                                                let classes = returnVal.split('.');
+
+                                                let style = classes.find((item) => item.includes('style'));
+                                                if (style) {
+                                                    style = style.split('(')[1].split(')')[0].split(';');
+
+                                                    style.forEach((item) => {
+                                                        if (item.trim()) {
+                                                            let [prop, val] = item.split(':');
+                                                            prop = prop.trim();
+                                                            val = val.trim();
+                                                            newel.style[prop] = val;
+                                                        }
+                                                    });
+                                                } else {
+                                                    let classList = classes.find((item) => item.includes('class'));
+                                                    if (classList) {
+                                                        classList = classList.split('(')[1].split(')')[0];
+                                                        newel.className = classList;
+                                                    }
+                                                }
+                                            } else if (returnVal.includes('#')) {
+                                                let id = returnVal.split('#')[1];
+                                                newel = document.createElement(returnVal.split('#')[0]);
+                                                newel.setAttribute('id', id);
+                                            } else {
+                                                newel = document.createElement(returnVal);
+                                            }
+
+                                            newel.innerHTML = '';
+                                            newel.innerHTML = newel.innerHTML + item[dotvalue];
+                                            container.append(newel);
+                                        });
+
+                                        element.id = json;
+                                        element.setAttribute('id', matches[0]);
+
+                                        document.querySelector(element.tagName).innerHTML = '';
+                                        document.querySelector(element.tagName).append(container);
+                                    }
+
+                                    if (window[json + 'Element'].length > 0) {
+                                        setData(element)
+                                    } else {
+                                        window.onmessage = (e) => {
+                                            if (e.origin == window.location.origin && e.data.type == 'setVar') {
+                                                let name = e.data.name
+                                                let value = e.data.value
+                                                console.log(name)
+                                                if (json == name) {
+                                                    console.log('set')
+                                                    window[json] = JSON.stringify(value)
+                                                    setData(element)
+                                                }
+
+                                            }
+                                        }
+                                    }
+
+
+
+
+
+
+
+
+
+
+
+
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+
+
+
+            window.rerender = rerender
+
+
+            if (html.querySelector(item).hasAttribute('props')) {
+                let el = html.querySelector(item)
+
+                let $props = html.querySelector(item).getAttribute('props').split(':');
+
+
+                $props.forEach((prop) => {
+
+
+
+                    props[item] = $props
+                    sessionStorage.setItem('$dox-props', JSON.stringify(props))
+
+                    let derivatives = template.querySelectorAll('[derive]');
+                    derivatives.forEach((subitem) => {
+                        let attr = subitem.getAttribute('derive');
+                        let derivedvalue = body.querySelector(item).getAttribute(attr);
+
+                        if (subitem.innerHTML.includes(`{{${attr}}}`)) {
+                            subitem.innerHTML = subitem.innerHTML.replace(`{{${attr}}}`, derivedvalue);
+                        }
+                    });
+
+                    if (prop == 'children') {
+                        if (html.querySelector(item).querySelector('slot')) {
+                            if (html.querySelector(item).innerHTML.includes('{{children}}')) {
+                                let value = html.querySelector(item).querySelector('slot').innerHTML;
+                                html.querySelector(item).innerHTML = html.querySelector(item).innerHTML.replace('{{children}}', value);
+                            }
+                        }
+                    }
+                    else {
+
+                        if (body.querySelector(item).getAttribute(prop)) {
+
+                            html.querySelector(item).innerHTML = html.querySelector(item).innerHTML.replace(`{{${prop}}}`, body.querySelector(item).getAttribute(prop));
+                        }
+                    }
+
+                });
+            }
+
+
+
+            if (document.querySelector(item)) {
+
+                templates.push({
+                    element: document.querySelector(item),
+                    parent: document.querySelector(item).parentNode,
+                    template: template.innerHTML,
+                    html: html,
+                    body: body
+                });
+            }
+            rerender()
+
+
+
+            function rerender(ele) {
+
+
+                let element = html.querySelector(item);
+                if (element) {
+
+                    let modules = html.querySelectorAll('import')
+
+                    modules.forEach(async (item) => {
+                        let file = item.getAttribute('src');
+
+                        if (!file.endsWith('.html')) {
+                            throw new Error('Unsupported imported file type!');
+                        }
+
+                        if (!window[file]) {
+
+
+                            fetch(file)
+                                .then((response) => {
+                                    return response.text();
+                                })
+                                .then(async (data) => {
+
+                                    await setTimeout(() => { }, 0)
+                                    window[file] = data
+                                    setData(data, html, document.body, item)
+                                })
+                            return;
+
+                        } else {
+
+                            await setTimeout(() => { }, 0)
+                            setData(window[file], html, document.body, item)
+                        }
+
+                    });
+                }
+
+
+            }
+
+
 
 
 
@@ -1020,109 +1200,109 @@ class Router {
 
     navigate() {
         let matchingRoute = false;
-      
-        if (this.routes) {
-          Object.keys(this.routes).forEach(async (route) => {
-            const { isMatch, params, query, asterisk } = this.isRouteMatch(this.currentRoute, route);
-      
-          
-            if (isMatch) {
-              matchingRoute = true;
-      
-              if (Object.keys(query).length > 0 && window.location.hash.includes('?')) {
-                route = window.location.hash.split('?')[0].replace('#', '');
-                const routeHandler = this.routes[route];
-                this.render(route);
-                await setTimeout(() => {}, 2); // Wait for the DOM to be ready
-                routeHandler({ params, query });
-                window.dox = window.dox || {};
-                return;
-              } else if (Object.keys(params).length > 0 && !window.location.hash.includes('?')) {
-                const routeHandler = this.routes[route];
-                const routeWithoutParams = route.split('/:')[0];
-                // Render the corresponding route
-                this.render(routeWithoutParams);
-      
-                await setTimeout(() => {}, 2); // Wait for the DOM to be ready
-                routeHandler({ params, query });
-      
-                window.dox = window.dox || {};
-      
-                return;
-              } else if (asterisk) {
-               
-                const routeHandler = this.routes[route];
-                const routeWithoutAsterisk =  route.split('/*')[0];
-                this.render(routeWithoutAsterisk);
-      
-                await setTimeout(() => {}, 2); // Wait for the DOM to be ready
-      
-                // Pass the asterisk value as a parameter to the route handler
-                routeHandler({ asterisk });
-      
-                window.dox = window.dox || {};
-      
-                return;
-              } else {
-                const routeHandler = this.routes[route];
-                this.render(route);
-      
-                await setTimeout(() => {}, 2); // Wait for the DOM to be ready
-                routeHandler({ params, query });
-                window.dox = window.dox || {};
-                return;
-              }
-            }
-          });
-        }
-      
-        if (!matchingRoute && this.fallbackRoute) {
-          window.location.hash = '#' + this.fallbackRoute;
-        }
-      }
 
-      isRouteMatch(route, pattern) {
+        if (this.routes) {
+            Object.keys(this.routes).forEach(async (route) => {
+                const { isMatch, params, query, asterisk } = this.isRouteMatch(this.currentRoute, route);
+
+
+                if (isMatch) {
+                    matchingRoute = true;
+
+                    if (Object.keys(query).length > 0 && window.location.hash.includes('?')) {
+                        route = window.location.hash.split('?')[0].replace('#', '');
+                        const routeHandler = this.routes[route];
+                        this.render(route);
+                        await setTimeout(() => { }, 2); // Wait for the DOM to be ready
+                        routeHandler({ params, query });
+                        window.dox = window.dox || {};
+                        return;
+                    } else if (Object.keys(params).length > 0 && !window.location.hash.includes('?')) {
+                        const routeHandler = this.routes[route];
+                        const routeWithoutParams = route.split('/:')[0];
+                        // Render the corresponding route
+                        this.render(routeWithoutParams);
+
+                        await setTimeout(() => { }, 2); // Wait for the DOM to be ready
+                        routeHandler({ params, query });
+
+                        window.dox = window.dox || {};
+
+                        return;
+                    } else if (asterisk) {
+
+                        const routeHandler = this.routes[route];
+                        const routeWithoutAsterisk = route.split('/*')[0];
+                        this.render(routeWithoutAsterisk);
+
+                        await setTimeout(() => { }, 2); // Wait for the DOM to be ready
+
+                        // Pass the asterisk value as a parameter to the route handler
+                        routeHandler({ asterisk });
+
+                        window.dox = window.dox || {};
+
+                        return;
+                    } else {
+                        const routeHandler = this.routes[route];
+                        this.render(route);
+
+                        await setTimeout(() => { }, 2); // Wait for the DOM to be ready
+                        routeHandler({ params, query });
+                        window.dox = window.dox || {};
+                        return;
+                    }
+                }
+            });
+        }
+
+        if (!matchingRoute && this.fallbackRoute) {
+            window.location.hash = '#' + this.fallbackRoute;
+        }
+    }
+
+    isRouteMatch(route, pattern) {
         const routeSegments = route.split('/').filter((segment) => segment !== '');
         const patternSegments = pattern.split('/').filter((segment) => segment !== '');
-  
+
         if (routeSegments.length !== patternSegments.length && !pattern.includes('*')) {
-          return { isMatch: false };
+            return { isMatch: false };
         }
-      
+
         const params = {};
         let query = {};
         let asterisk = '';
-      
+
         for (let i = 0; i < patternSegments.length; i++) {
-          const routeSegment = routeSegments[i];
-          const patternSegment = patternSegments[i];
-      
-          if (patternSegment.startsWith(':')) {
-            const paramName = patternSegment.slice(1);
-            const paramValue = routeSegment;
-            params[paramName] = paramValue;
-          } else if (patternSegment.includes('?')) {
-            const patternSegmentsWithQuery = patternSegment.split('?');
-            const queryStr = patternSegmentsWithQuery[1];
-            query = this.extractQuery(queryStr);
-          } else if (patternSegment.includes('*')) {
-            // Capture the remaining path after the asterisk
-            asterisk = routeSegments.slice(i).join('/');
-            break;
-          } else if (routeSegment !== patternSegment) {
-            return { isMatch: false };
-          }
+            const routeSegment = routeSegments[i];
+            const patternSegment = patternSegments[i];
+
+            if (patternSegment.startsWith(':')) {
+                const paramName = patternSegment.slice(1);
+                const paramValue = routeSegment;
+                params[paramName] = paramValue;
+            } else if (patternSegment.includes('?')) {
+                const patternSegmentsWithQuery = patternSegment.split('?');
+                const queryStr = patternSegmentsWithQuery[1];
+                query = this.extractQuery(queryStr);
+            } else if (patternSegment.includes('*')) {
+                // Capture the remaining path after the asterisk
+                asterisk = routeSegments.slice(i).join('/');
+                break;
+            } else if (routeSegment !== patternSegment) {
+                return { isMatch: false };
+            }
         }
-      
+
         return { isMatch: true, params, query, asterisk };
-      }
-      
-      
+    }
+
+
 
     // Rest of the code remains the same
 
 
- 
+
 
 
     get(route, handler) {
@@ -1186,7 +1366,7 @@ class Router {
 
 }
 
-imports.map((item) => {
+imports.map(async (item) => {
     if (!item.endsWith('.html') && !item.endsWith('.css') && !item.endsWith('.js')) {
         throw new Error('Unsupported imported file type!');
     }
@@ -1199,7 +1379,7 @@ imports.map((item) => {
         document.querySelector('head').appendChild(preload);
 
         if (!cache[item]) {
-            fetch(item)
+            await fetch(item)
                 .then((response) => {
                     return response.text();
                 })
@@ -1212,15 +1392,15 @@ imports.map((item) => {
                     }
                     let pscript = document.createElement('script')
 
-                            pscript.id = 'dox-script'
+                    pscript.id = 'dox-script'
 
-                            pscript.type = 'module'
-                            pscript.innerHTML = data
-                            document.head.appendChild(pscript)
- 
-                             
+                    pscript.type = 'module'
+                    pscript.innerHTML = data
+                    document.head.appendChild(pscript)
 
-                  
+
+
+
 
 
 
@@ -1243,7 +1423,7 @@ imports.map((item) => {
         if (cache[item]) {
             parser(cache[item]);
         } else {
-            fetch(item)
+            await fetch(item)
                 .then((response) => {
                     return response.text();
                 })
@@ -1258,8 +1438,8 @@ async function setData(data, html, body, item) {
     let exported = item.getAttribute('exports').split(',');
     let importName = item.getAttribute('exports').split(',');
     let dom = new DOMParser();
-     let dhtml = await dom.parseFromString(data, 'text/html').body
- 
+    let dhtml = await dom.parseFromString(data, 'text/html').body
+
 
 
 
@@ -1286,6 +1466,36 @@ async function setData(data, html, body, item) {
 
         }
     }
+    dhtml.querySelectorAll('[state]').forEach((element) => {
+        let state = element.getAttribute('state')
+        console.log(state)
+        element.id = state
+        if (getState(state) == undefined || getState(state) == null) {
+            setState(state, '')
+        }
+        element.innerHTML = element.innerHTML + getState(state)
+
+        setTimeout(() => {
+            effect((state), (statev) => {
+
+                setTimeout(() => {
+                    if (element.tagName == 'INPUT' || element.tagName == 'TEXTAREA') element.value = statev;
+                    if (element.tagName == 'SELECT') element.value = statev;
+                    if (element.tagName == 'IMG') element.src = statev;
+                    if (element.tagName == 'A') element.href = statev;
+                    if (element.tagName == 'IFRAME') element.src = statev;
+                    if (element.tagName == 'VIDEO') element.src = statev;
+                    if (element.tagName == 'AUDIO') element.src = statev;
+                    if (element.tagName == 'EMBED') element.src = statev;
+                    if (element.tagName == 'OBJECT') element.src = statev;
+                    if (element.tagName == 'SOURCE') element.src = statev;
+                    if (element.tagName == 'TRACK') element.src = statev;
+                    else element.innerHTML = statev;
+                    document.querySelector(`#${state}`).innerHTML = statev
+                }, 0)
+            })
+        }, 0)
+    })
     if (dhtml.querySelector('if')) {
         let el = dhtml.querySelector('if')
 
@@ -1313,40 +1523,82 @@ async function setData(data, html, body, item) {
 
     }
     dhtml.querySelectorAll('var').forEach((item) => {
+
         item.style.display = 'none';
         let varName = item.getAttribute('name');
         let varValue = item.innerHTML;
+
+
+
         dhtml.querySelectorAll('*').forEach((element) => {
             let matches = element.innerHTML.match(/{{(.*?)}}/g);
             if (matches && element.innerHTML.includes(`{{${varName}}}`)) {
+                element.id = varName
+                let original = element.innerHTML;
+
                 matches.forEach((match) => {
+
+
                     element.innerHTML = element.innerHTML.replace(match, varValue)
+
                 });
             }
         });
+
         item.remove();
         return;
     });
-    
-    let proptemplates =[]
-     
-    dhtml.querySelectorAll('[props]').forEach((item) => {
-        console.log(item)
+    dhtml.querySelectorAll('*').forEach((element) => {
+        // check if element has {{json.map(varName).return('li')}}
+        if (element.innerHTML.includes('{{')) {
+            let matches = element.innerHTML.match(/{{(.*?)}}/g);
+            if (matches) {
+                let val = matches[0].split('{{')[1].split('}}')[0]
+                if (val.includes('json.map')) {
+                    let json = val.split('json.map(')[1].split(')')[0]
+                    if (window[json]) {
+                        if (val.includes('return')) {
+                            let returnVal = val.split('return(')[1].split(')')[0].replace(/'/g, '')
+                            let parsed = JSON.parse(window[json])
+                            parsed.forEach((item) => {
+
+                                let newel = document.createElement(returnVal)
+                                console.log(item)
+                                newel.innerHTML = newel.innerHTML + item.name
+                                element.innerHTML = newel.outerHTML
+                            })
+
+                            console.log(element.innerHTML)
+                        }
+
+                    }
+
+                }
+            }
+        }
+    });
+
+
+    let proptemplates = []
+
+    dhtml.querySelectorAll('[props]').forEach(async (item) => {
+
         let name = item.tagName;
         if (html.querySelector(name)) {
             let $props = item.getAttribute('props').split(':');
-            $props.forEach((prop) => {
+            $props.forEach(async (prop) => {
                 props[name] = $props;
                 sessionStorage.setItem('$dox-props', JSON.stringify(props))
-                 
+
                 if (prop == 'children') {
+
                     if (html.querySelector(name).querySelector('slot')) {
                         if (dhtml.querySelector(name).innerHTML.includes('{{children}}')) {
-                            if(proptemplates.length > 0){
+                            if (proptemplates.length > 0) {
                                 proptemplates.forEach((item) => {
-                                   if(item.parent == dhtml.querySelector(name).parentNode){
-                                    dhtml.querySelector(name).innerHTML = item.template
-                                   }
+                                    if (item.parent == dhtml.querySelector(name).parentNode) {
+                                        dhtml.querySelector(name).innerHTML = item.template
+                                    }
                                 })
 
                             }
@@ -1355,21 +1607,24 @@ async function setData(data, html, body, item) {
                                 template: dhtml.querySelector(name).innerHTML,
                                 parent: dhtml.querySelector(name).parentNode ? dhtml.querySelector(name).parentNode : null,
                             })
-                            
-                            dhtml.querySelector(name).innerHTML = dhtml.querySelector(name).innerHTML.replace('{{children}}', html.querySelector(name).querySelector('slot').innerHTML);
-                          
+
+
+                            dhtml.querySelector(name).innerHTML = dhtml.querySelector(name).innerHTML.replace(`{{children}}`, html.querySelector(name).querySelector('slot').innerHTML);
+
+
+
                         }
                     }
-                }else{
+                } else {
                     if (html.querySelector(name).getAttribute(prop)) {
-                       
-                        if(proptemplates.length > 0){
+
+                        if (proptemplates.length > 0) {
                             proptemplates.forEach((item) => {
 
-                               if(dhtml.querySelector(name).innerHTML.includes(`{{${prop}}}`)){
-                                 dhtml.querySelector(name).innerHTML = dhtml.querySelector(name).innerHTML.replace(`{{${prop}}}`, html.querySelector(name).getAttribute(prop));
-                              
-                               }
+                                if (dhtml.querySelector(name).innerHTML.includes(`{{${prop}}}`)) {
+                                    dhtml.querySelector(name).innerHTML = dhtml.querySelector(name).innerHTML.replace(`{{${prop}}}`, html.querySelector(name).getAttribute(prop));
+
+                                }
                             })
 
                         }
@@ -1379,7 +1634,7 @@ async function setData(data, html, body, item) {
                                 template: dhtml.querySelector(name).innerHTML,
                                 parent: dhtml.querySelector(name).parentNode ? dhtml.querySelector(name).parentNode : null,
                             })
-                            
+
                             let value = html.querySelector(name).getAttribute(prop);
                             dhtml.querySelector(name).innerHTML = dhtml.querySelector(name).innerHTML.replace(`{{${prop}}}`, value);
                         }
@@ -1453,7 +1708,7 @@ async function setData(data, html, body, item) {
                 }
             })
         }
-        
+
     });
 
 
@@ -1461,58 +1716,56 @@ async function setData(data, html, body, item) {
 
 
 
-     
-        
-        exported.forEach(async (exportItem) => {
-       
-            let el = dhtml.querySelector(exportItem) ? dhtml.querySelector(exportItem) :  html.querySelector(exportItem)
-        
-                
-            function waitForElm(selector) {
-                return new Promise(resolve => {
+
+
+    exported.forEach(async (exportItem) => {
+
+        let el = dhtml.querySelector(exportItem) ? dhtml.querySelector(exportItem) : html.querySelector(exportItem)
+
+
+        function waitForElm(selector) {
+            return new Promise(resolve => {
+                if (document.querySelector(selector)) {
+                    return resolve(document.querySelector(selector));
+                }
+
+                const observer = new MutationObserver(mutations => {
                     if (document.querySelector(selector)) {
-                        return resolve(document.querySelector(selector));
+                        resolve(document.querySelector(selector));
+                        observer.disconnect();
                     }
-            
-                    const observer = new MutationObserver(mutations => {
-                        if (document.querySelector(selector)) {
-                            resolve(document.querySelector(selector));
-                            observer.disconnect();
-                        }
-                    });
-            
-                    observer.observe(document.body, {
-                        childList: true,
-                        subtree: true
-                    });
                 });
-            }
-            let elm = await waitForElm(exportItem)
-            
-                 
-           elm.innerHTML = el.innerHTML
-           if(elm.hasAttribute('onclick')){
-             let click = elm.getAttribute('onclick')
-             console.log(click)
-           }
-       
-        
+
+                observer.observe(document.body, {
+                    childList: true,
+                    subtree: true
+                });
+            });
+        }
+        let elm = await waitForElm(exportItem)
+
+
+        elm.innerHTML = el.innerHTML
+
+
+
 
     });
-  
-   
+
+
 
 
 }
 
 window.Router = Router;
 window.dox = dox;
- 
+
 
 const states = {};
 
 // Function to set the state value
 const setState = ($name, $value) => {
+    console.log($name, $value)
     states[$name] = $value;
     window.postMessage({ name: $name, value: $value }, '*');
 };
@@ -1545,6 +1798,3 @@ window.getState = getState
 window.setState = setState
 window.dox = dox;
 
-
-export default dox;
- 
