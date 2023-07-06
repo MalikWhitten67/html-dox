@@ -85,21 +85,23 @@ const parser = async (data) => {
 
     let _export = html.querySelector('export');
 
-    _export.style.display = 'none';
+    _export ? _export.style.display = 'none' : null;
     let _vars = html.querySelectorAll('var');
 
     _vars.forEach((item) => {
 
         item.style.display = 'none';
         let varName = item.getAttribute('name');
-        let varValue = item.innerHTML;
-        window[varName] = varValue;
+        let varValue = item.innerHTML.replace(/\s/g, '');
+        window[varName] = varValue 
         if (item.html) {
             window[varName + 'Element'] = item;
         } else {
 
             window[varName + 'Element'] = item;
         }
+
+
 
 
         if (item.hasAttribute('state')) {
@@ -745,16 +747,20 @@ const parser = async (data) => {
 
 
                         if (val.includes('json.map(')) {
+                            
 
                             let json = val.split('json.map(')[1].split(')')[0];
+                             
                             // value return is like json.map(varName.name).return('li')
                             // get varName.name
                             let dotvalue = val.split('json.map(')[1].split(')')[0].split('.')[1];
+                            
                             json = val.split('json.map(')[1].split(')')[0].split('.')[0];
 
 
                             if (window[json] || window[json + 'Element']) {
 
+                               
                                 if (val.includes('return')) {
 
                                     function setData(html) {
@@ -763,6 +769,7 @@ const parser = async (data) => {
                                         element = html
                                         let container = document.createElement('div');
                                         let returnVal = val.split('return(')[1].split(')')[0].replace(/'/g, '');
+                                        
                                         let parsed;
 
                                         try {
@@ -773,6 +780,7 @@ const parser = async (data) => {
                                         }
 
                                         parsed.forEach((item) => {
+                                            
                                             let newel;
                                             if (returnVal.includes('[')) {
                                                 let elname = returnVal.split('[')[0];
@@ -824,13 +832,15 @@ const parser = async (data) => {
                                         if (document.querySelector(element.tagName)) {
                                             document.querySelector(element.tagName).innerHTML = ''
                                             document.querySelector(element.tagName).append(container)
+                                            element.innerHTML = element.innerHTML.replace(matches[0], container.innerHTML);
                                         } else {
                                             element.innerHTML = element.innerHTML.replace(matches[0], container.innerHTML);
+                                            
                                         }
                                     }
 
                                     if (window[json + 'Element'].innerHTML.length > 0) {
-                                         
+
                                         setData(element)
                                     } else {
                                         window.onmessage = (e) => {
@@ -871,91 +881,131 @@ const parser = async (data) => {
                             let data = match.split('{{')[1].split('}}')[0];
                             if (data.includes('map') && !data.includes('json.map')) {
                                 match = match.replace('&gt;', '>')
-                            
+
                                 let dom = new DOMParser();
                                 let json = data.split('map(')[1].split(')')[0];
-                                 // .return(filter(sale_price => sale_price.length > 1 )) get the ()
+                                // .return(filter(sale_price => sale_price.length > 1 )) get the ()
                                 let returnMethod = data.split('return(')[1].split(')')[0];
-                                 
-                                returnMethod = returnMethod.replace('&gt;', '>').replace('&gt;', '>')  
-                                
+
+                                returnMethod = returnMethod.replace('&gt;', '>').replace('&gt;', '>')
+
                                 let returnHTML = match.split('){')[1].trim().split('}}')[0].trim();
-                                returnHTML = returnHTML 
-                                 
+                                returnHTML = returnHTML
                                 let html = dom.parseFromString(returnHTML, 'text/html');
-                               
-                                let firstElement = returnHTML.split('<')[1].split('>')[0];
-                            
+
+                                // div class="card" if any attributes it should only grab div
+                                let firstElement =  returnHTML.split(' ')[0].split('<')[1]
+                                
+
                                 let parentElement = document.createElement('div');
-                            
-                                function setData(e) {
+
+                                async function setData(e) {
                                     let name;
                                     let value;
                                     if (e && e.data) {
                                         name = e.data.name;
                                         value = e.data.value;
                                     }
-                            
+
                                     if (json == name || window[json]) {
                                         if (e && e.data) {
-                                            window[json] = value;
-                                         
-                                        } else {
-                                            window[json] = JSON.parse(window[json]);
-                                        }
-                            
+                                            window[json] =  JSON.stringify(value)
+
+                                        } 
+
                                         parentElement.innerHTML = '';
-                            
-                                        let parsed = window[json];
-                            
+
+                                        let parsed = JSON.parse(window[json]);
+                                      
+
                                         let elements = [];
                                         let func
                                         let modifiedData;
-                                        if(returnMethod.length > 0){
-                                          func = new Function('json', `return ${json}.${returnMethod})`);
-                                          modifiedData = func(parsed);
-                                         } else {
-                                           modifiedData = parsed;
+                                        if (returnMethod.length > 0) {
+                                            func = new Function('json', `return ${json}.${returnMethod})`);
+                                            modifiedData = func(parsed);
+                                        } else {
+                                            modifiedData = parsed;
                                         }
+ 
 
-                                          
-                                       
-                                         
+
+ 
                                         modifiedData.forEach((item) => {
-                                           
-                                            let divElement = document.createElement(firstElement[0]);
-                                             
+
+                                            let divElement;
+
                                             let embeddedHTML = html.body.innerHTML;
-                            
+
                                             Object.entries(item).forEach(([key, value]) => {
                                                 embeddedHTML = embeddedHTML.replace(new RegExp(`{${json}.${key}}`, 'g'), value);
                                             });
-                            
-                                            divElement.innerHTML = embeddedHTML;
-                                            elements.push(divElement);
-                                            parentElement.append(divElement);
+
+                                            divElement = embeddedHTML;
+                                             
+                                            parentElement.innerHTML = parentElement.innerHTML + divElement;
+                                            
                                         });
-                            
-                                         
-                            
-                                        document.querySelector(`[map="${json}"]`).innerHTML = parentElement.innerHTML;
+
+                                        function waitForElm(selector) {
+                                            return new Promise(resolve => {
+                                                if (document.querySelector(selector)) {
+                                                    return resolve(document.querySelector(selector));
+                                                }
+                                
+                                                const observer = new MutationObserver(mutations => {
+                                                    if (document.querySelector(selector)) {
+                                                        resolve(document.querySelector(selector));
+                                                        observer.disconnect();
+                                                    }
+                                                });
+                                
+                                                observer.observe(document.body, {
+                                                    childList: true,
+                                                    subtree: true
+                                                });
+                                            });
+                                        }
+                                        let elm = await waitForElm(`[map="${json}"]`);
+
+                                        
+                                        if (elm) {
+                                             
+                                            let container = document.createElement('div');
+                                            container.innerHTML = parentElement.innerHTML;
+                                            container.setAttribute('container-map', json);
+                                            if(!elm.querySelector(`[container-map="${json}"]`)) {
+                                                
+                                                 elm.innerHTML = elm.innerHTML + container.innerHTML;
+                                            }else{
+                                                elm.querySelector(`[container-map="${json}"]`).innerHTML = parentElement.innerHTML;
+                                            }
+                                        } 
+                                        document.body.innerHTML = document.body.innerHTML.replace(/{{(.*?)}}/gs, '')
+                                        if (document.body.innerHTML.includes('}')) {
+                                            document.body.innerHTML = document.body.innerHTML.replace(/}/g, '')
+                                        }
                                     }
                                 }
-                            
+
+                              
                                 if (window[json]) {
                                     setData();
-                                }
-                            
+                                }  
+
                                 window.addEventListener('message', (e) => {
                                     if (e.origin == window.location.origin && e.data.type == 'setVar') {
                                         setData(e);
                                     }
                                 });
+
+
                             }
-                            
+
+
                         });
                     }
-                    
+
 
 
 
@@ -972,7 +1022,7 @@ const parser = async (data) => {
 
             window.rerender = rerender
 
- 
+
             if (html.querySelector(item).hasAttribute('props')) {
                 let el = html.querySelector(item)
 
@@ -1096,156 +1146,100 @@ const parser = async (data) => {
 
 
 
-    body.querySelectorAll('type').forEach((item) => {
-        let subtypes = item.querySelectorAll('subtype');
-        types.push({
-            name: item.getAttribute('name'),
-            constraint: item.getAttribute('constraint'),
-            isStrict: item.getAttribute('isStrict')
-        });
-
-        item.querySelectorAll('subtype').forEach((subitem) => {
-            if (!contraintTypes[subitem.getAttribute('constraint')]) {
-                throw new Error('The constraint type does not exist');
-                return;
-            }
-            types.push({
-                name: subitem.getAttribute('name'),
-                constraint: subitem.getAttribute('constraint')
-            });
-        });
-        subtypes.forEach((subitem) => {
-            if (!contraintTypes[subitem.getAttribute('constraint')]) {
-                throw new Error('The constraint type does not exist');
-                return;
-            }
-            types.push({
-                name: subitem.getAttribute('name'),
-                constraint: subitem.getAttribute('constraint')
-            });
-        });
-
-        let subtypElements = html.querySelectorAll('[subtype]');
-        subtypElements.forEach((thisitem) => {
-            if (thisitem.innerHTML.includes('{{')) {
-                let value = thisitem.innerHTML.split('{{')[1].split('}}')[0];
-                body.querySelectorAll(`[${value}]`).forEach((item) => {
-                    let attrValue = item.getAttribute(value);
-
-                    let subtypeName = thisitem.getAttribute('subtype');
-                    let subtype = types.find((type) => type.name === subtypeName);
-                    let strict = subtype.isStrict;
-
-                    if (subtype && strict) {
-                        let constraintType = contraintTypes[subtype.constraint];
-                        let convertedValue;
-
-                        if (constraintType === Number) {
-                            convertedValue = Number(attrValue);
-                            convertedValue = isNaN(convertedValue) ? 0 : convertedValue;
-                            if (convertedValue === 0) {
-                                throw new Error(`Invalid  value for subtype "${subtypeName}": ${attrValue} (expected number)`);
-                            }
-
-
-                        } else if (constraintType === Boolean) {
-                            if (attrValue.toLowerCase() === 'true') {
-                                convertedValue = true;
-                            } else if (attrValue.toLowerCase() === 'false') {
-                                convertedValue = false;
-                            } else {
-                                throw new Error(`Invalid attribute value for subtype "${subtypeName}": ${attrValue} (expected boolean)`);
-                            }
-                        } else if (constraintType === String) {
-                            convertedValue = attrValue;
-                        }
-                        else {
-                            throw new Error(`Invalid constraint type for subtype "${subtypeName}": ${subtype.constraint}`);
-                        }
-                    }
-
-                });
-            }
-        });
-    });
     html.querySelectorAll('type').forEach((item) => {
+        if (!item.parentNode.tagName == 'types') {
+            throw new Error('Type must be inside of types tag')
+        }
 
         // Check if 2 subtypes have the same name
         let subtypes = item.querySelectorAll('subtype');
         let names = [];
-        subtypes.forEach((subitem) => {
-            names.push(subitem.getAttribute('name'));
-            if (names.filter((name, index) => names.indexOf(name) !== index).length > 0) {
-                throw new Error('Two subtypes cannot have the same name');
-                return;
-            } else if (subitem.getAttribute('name') === item.getAttribute('name')) {
-                throw new Error('Types and subtypes cannot have the same name');
-                return;
-            }
-        });
+
 
         types.push({
-            name: item.getAttribute('name'),
-            constraint: item.getAttribute('constraint'),
-            isStrict: item.getAttribute('isStrict')
+            var: item.getAttribute('var') ? item.getAttribute('var') : null,
+            prop: item.getAttribute('prop') ? item.getAttribute('prop') : null,
+            type: item.getAttribute('type') ? item.getAttribute('type') : null,
+            default: item.getAttribute('default') ? item.getAttribute('default') : null,
         });
 
-        item.querySelectorAll('subtype').forEach((subitem) => {
-            if (!contraintTypes[subitem.getAttribute('constraint')]) {
-                throw new Error('The constraint type does not exist');
-                return;
-            }
-            types.push({
-                name: subitem.getAttribute('name'),
-                constraint: subitem.getAttribute('constraint'),
-                isStrict: subitem.getAttribute('isStrict')
-
-            });
-        });
-
-        let subtypElements = html.querySelectorAll('[subtype]');
-        subtypElements.forEach((thisitem) => {
-            // Check if template value {{}}
-            if (thisitem.innerHTML.includes('{{')) {
-                let value = thisitem.innerHTML.split('{{')[1].split('}}')[0];
-                body.querySelectorAll(`[${value}]`).forEach((item) => {
-                    let attrValue = item.getAttribute(value);
-
-                    let subtypeName = thisitem.getAttribute('subtype');
-                    let subtype = types.find((type) => type.name === subtypeName);
-                    let strict = subtype.isStrict;
-
-                    if (subtype && strict) {
-                        let constraintType = contraintTypes[subtype.constraint];
-
-                        let convertedValue;
-
-                        if (constraintType === Number) {
-                            convertedValue = Number(attrValue);
-                            convertedValue = isNaN(convertedValue) ? 0 : convertedValue;
-                            if (convertedValue === 0) {
-                                throw new Error(`Invalid  value for subtype "${subtypeName}": ${attrValue} (expected number)`);
-                            }
-
-                        } else if (constraintType === Boolean) {
-                            if (attrValue.toLowerCase() === 'true') {
-                                convertedValue = true;
-                            } else if (attrValue.toLowerCase() === 'false') {
-                                convertedValue = false;
-                            } else {
-                                throw new Error(`Invalid attribute value for subtype "${subtypeName}": ${attrValue} (expected boolean)`);
-                            }
-                        } else if (constraintType === String) {
-                            convertedValue = attrValue;
-                        }
-                        else {
-                            throw new Error(`Invalid constraint type for subtype "${subtypeName}": ${subtype.constraint}`);
-                        }
+        function checkType() {
+            types.forEach((type) => {
+              if (type.var) {
+                if (names.includes(type.var)) {
+                  let variable = window[type.var];
+                  if (!variable) throw new Error(`Variable "${type.var}" is not defined`);
+                  let innerval = variable.trim();
+                 
+          
+                  if(type.type.toLowerCase() === 'array') {
+                    if(!Array.isArray(variable)) {
+                      throw new Error(`Variable "${type.var}" is not an array`);
                     }
+                  }else if (type.type.toLowerCase() === 'url') {
+                    if(!innerval.includes('http') && !innerval.includes('https')) {
+                      throw new Error(`Variable "${type.var}" is not a url`);
+                    }
+                  }
+                  if (type.type.toLowerCase() === 'string') {
+                    // Type check for string
+                    if (!isNaN(parseFloat(innerval))) {
+                      throw new Error(`Variable "${type.var}" is a number, not a string`);
+                    } else if (innerval.toLowerCase() === 'true' || innerval.toLowerCase() === 'false') {
+                      throw new Error(`Variable "${type.var}" is a boolean, not a string`);
+                    }
+                  } else if (type.type.toLowerCase() === 'number') {
+                    // Type check for number
+                    if (isNaN(parseFloat(innerval))) {
+                      throw new Error(`Variable "${type.var}" is a string, not a number`);
+                    }
+                  } else if (type.type.toLowerCase() === 'boolean') {
+                    // Type check for boolean
+                    if (innerval.toLowerCase() !== 'true' && innerval.toLowerCase() !== 'false') {
+                      throw new Error(`Variable "${type.var}" is a string, not a boolean`);
+                    }
+                  } else {
+                    throw new Error(`Unsupported type: ${type.type}`);
+                  }
+                } else {
+                  names.push(type.var);
+                  window[type.var] = type.default;
+                  checkType();
+                }
+              } else if (type.prop) {
+                if (html.querySelector(`[${type.prop}]`) || document.querySelector(`[${type.prop}]`)) {
+                  let value = html.querySelector(`[${type.prop}]`)?.getAttribute(type.prop) || document.querySelector(`[${type.prop}]`)?.getAttribute(type.prop);
+          
+                  if (type.type.toLowerCase() === 'string') {
+                    // Type check for string
+                    if (!isNaN(parseFloat(value)) && !isFinite(value)) {
+                      throw new Error(`Prop "${type.prop}" is a number, not a string`);
+                    } else if (value.toLowerCase() === 'true' || value.toLowerCase() === 'false') {
+                      throw new Error(`Prop "${type.prop}" is a boolean, not a string`);
+                    } else if (!isNaN(parseFloat(value)) && isFinite(value)) {
+                      throw new Error(`Prop "${type.prop}" is a number, not a string`);
+                    }
+                  } else if (type.type.toLowerCase() === 'boolean') {
+                    // Type check for boolean
+                    if (!isNaN(parseFloat(value))) {
+                      throw new Error(`Prop "${type.prop}" is a number, not a boolean`);
+                    } else if (value.toLowerCase() !== 'true' && value.toLowerCase() !== 'false') {
+                      throw new Error(`Prop "${type.prop}" is a string, not a boolean`);
+                    }
+                  }
+                } else {
+                  throw new Error(`Prop "${type.prop}" is not defined or is defined more than once`);
+                }
+              } else {
+                throw new Error('Type must have var or prop attribute');
+              }
+            });
+          }
+          
 
-                });
-            }
-        });
+
+        checkType()
+
 
     });
 
@@ -1321,7 +1315,7 @@ class Router {
                         route = window.location.hash.split('?')[0].replace('#', '');
                         const routeHandler = this.routes[route];
                         this.render(route);
-                        await setTimeout(() => { }, 2); // Wait for the DOM to be ready
+                        await setTimeout(() => { }, 2);  
                         routeHandler({ params, query });
                         window.dox = window.dox || {};
                         return;
@@ -1354,8 +1348,7 @@ class Router {
                     } else {
                         const routeHandler = this.routes[route];
                         this.render(route);
-
-                        await setTimeout(() => { }, 2); // Wait for the DOM to be ready
+ 
                         routeHandler({ params, query });
                         window.dox = window.dox || {};
                         return;
@@ -1659,11 +1652,13 @@ async function setData(data, html, body, item) {
     dhtml.querySelectorAll('*').forEach((element) => {
         // check if element has {{json.map(varName).return('li')}}
         if (element.innerHTML.includes('{{')) {
+             
             let matches = element.innerHTML.match(/{{(.*?)}}/g);
             if (matches) {
                 let val = matches[0].split('{{')[1].split('}}')[0]
                 if (val.includes('json.map')) {
                     let json = val.split('json.map(')[1].split(')')[0]
+                  
                     if (window[json]) {
                         if (val.includes('return')) {
                             let returnVal = val.split('return(')[1].split(')')[0].replace(/'/g, '')
