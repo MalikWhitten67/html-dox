@@ -97,6 +97,7 @@ const parser = async (data) => {
         if (item.html) {
             window[varName + 'Element'] = item;
         } else {
+
             window[varName + 'Element'] = item;
         }
 
@@ -733,8 +734,9 @@ const parser = async (data) => {
                 }, 0)
             })
             html.querySelectorAll('*').forEach(async (element) => {
-                // check if element has {{json.map(varName).return('li')}}
+
                 if (element.innerHTML.includes('{{')) {
+
                     let matches = element.innerHTML.match(/{{(.*?)}}/g);
                     let original = element.innerHTML;
                     // if 
@@ -743,6 +745,7 @@ const parser = async (data) => {
 
 
                         if (val.includes('json.map(')) {
+
                             let json = val.split('json.map(')[1].split(')')[0];
                             // value return is like json.map(varName.name).return('li')
                             // get varName.name
@@ -755,18 +758,20 @@ const parser = async (data) => {
                                 if (val.includes('return')) {
 
                                     function setData(html) {
-                                        window[json] = JSON.parse(window[json])
+
 
                                         element = html
                                         let container = document.createElement('div');
                                         let returnVal = val.split('return(')[1].split(')')[0].replace(/'/g, '');
                                         let parsed;
+
                                         try {
                                             parsed = JSON.parse(window[json])
                                         }
                                         catch (e) {
                                             console.log(e)
                                         }
+
                                         parsed.forEach((item) => {
                                             let newel;
                                             if (returnVal.includes('[')) {
@@ -815,11 +820,17 @@ const parser = async (data) => {
                                         element.id = json;
                                         element.setAttribute('id', matches[0]);
 
-                                        document.querySelector(element.tagName).innerHTML = '';
-                                        document.querySelector(element.tagName).append(container);
+
+                                        if (document.querySelector(element.tagName)) {
+                                            document.querySelector(element.tagName).innerHTML = ''
+                                            document.querySelector(element.tagName).append(container)
+                                        } else {
+                                            element.innerHTML = element.innerHTML.replace(matches[0], container.innerHTML);
+                                        }
                                     }
 
-                                    if (window[json + 'Element'].length > 0) {
+                                    if (window[json + 'Element'].innerHTML.length > 0) {
+                                         
                                         setData(element)
                                     } else {
                                         window.onmessage = (e) => {
@@ -851,8 +862,109 @@ const parser = async (data) => {
                                 }
                             }
                         }
+
                     }
+
+                    let matchesWithNewlines = element.innerHTML.match(/{{(.*?)}}/gs);
+                    if (matchesWithNewlines) {
+                        matchesWithNewlines.forEach((match) => {
+                            let data = match.split('{{')[1].split('}}')[0];
+                            if (data.includes('map') && !data.includes('json.map')) {
+                                match = match.replace('&gt;', '>')
+                            
+                                let dom = new DOMParser();
+                                let json = data.split('map(')[1].split(')')[0];
+                                 // .return(filter(sale_price => sale_price.length > 1 )) get the ()
+                                let returnMethod = data.split('return(')[1].split(')')[0];
+                                 
+                                returnMethod = returnMethod.replace('&gt;', '>').replace('&gt;', '>')  
+                                
+                                let returnHTML = match.split('){')[1].trim().split('}}')[0].trim();
+                                returnHTML = returnHTML 
+                                 
+                                let html = dom.parseFromString(returnHTML, 'text/html');
+                               
+                                let firstElement = returnHTML.split('<')[1].split('>')[0];
+                            
+                                let parentElement = document.createElement('div');
+                            
+                                function setData(e) {
+                                    let name;
+                                    let value;
+                                    if (e && e.data) {
+                                        name = e.data.name;
+                                        value = e.data.value;
+                                    }
+                            
+                                    if (json == name || window[json]) {
+                                        if (e && e.data) {
+                                            window[json] = value;
+                                         
+                                        } else {
+                                            window[json] = JSON.parse(window[json]);
+                                        }
+                            
+                                        parentElement.innerHTML = '';
+                            
+                                        let parsed = window[json];
+                            
+                                        let elements = [];
+                                        let func
+                                        let modifiedData;
+                                        if(returnMethod.length > 0){
+                                          func = new Function('json', `return ${json}.${returnMethod})`);
+                                          modifiedData = func(parsed);
+                                         } else {
+                                           modifiedData = parsed;
+                                        }
+
+                                          
+                                       
+                                         
+                                        modifiedData.forEach((item) => {
+                                           
+                                            let divElement = document.createElement(firstElement[0]);
+                                             
+                                            let embeddedHTML = html.body.innerHTML;
+                            
+                                            Object.entries(item).forEach(([key, value]) => {
+                                                embeddedHTML = embeddedHTML.replace(new RegExp(`{${json}.${key}}`, 'g'), value);
+                                            });
+                            
+                                            divElement.innerHTML = embeddedHTML;
+                                            elements.push(divElement);
+                                            parentElement.append(divElement);
+                                        });
+                            
+                                         
+                            
+                                        document.querySelector(`[map="${json}"]`).innerHTML = parentElement.innerHTML;
+                                    }
+                                }
+                            
+                                if (window[json]) {
+                                    setData();
+                                }
+                            
+                                window.addEventListener('message', (e) => {
+                                    if (e.origin == window.location.origin && e.data.type == 'setVar') {
+                                        setData(e);
+                                    }
+                                });
+                            }
+                            
+                        });
+                    }
+                    
+
+
+
+
+
+
+
                 }
+
             });
 
 
@@ -860,7 +972,7 @@ const parser = async (data) => {
 
             window.rerender = rerender
 
-
+ 
             if (html.querySelector(item).hasAttribute('props')) {
                 let el = html.querySelector(item)
 
@@ -1793,3 +1905,4 @@ window.getState = getState
 
 window.setState = setState
 window.dox = dox;
+
