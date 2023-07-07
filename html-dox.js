@@ -10,11 +10,14 @@ if (importmeta) {
 } else if (importsTag) {
     throw new Error('<imports> is deprecated use <meta imports="/someimport,/someimport"> instead! read latest git release for more info: https://github.com/MalikWhitten67/html-dox/releases/latest')
 }
-
-imports = imports.split(',')
+if(imports.length > 0 ) {
+    imports = imports.split(',')
+} else{
+    throw new Error('No imports found! Please add <meta imports="/someimport,/someimport"> to your html file')
+}
+ 
 // remove empty strings
 imports = imports.filter(Boolean)
-
 let cache = {}
 
 let types = []
