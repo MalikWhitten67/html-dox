@@ -1254,7 +1254,6 @@ const parser = async (data) => {
 
 
 
-
 class Router {
     constructor(routes) {
         this.routes = routes || {};
@@ -1279,7 +1278,7 @@ class Router {
     }
 
     render(route) {
-
+       
         templates.forEach((item) => {
             let parent = item.parent;
             let template = item.template;
@@ -1290,7 +1289,6 @@ class Router {
                 document.title = title;
             }
             if (parent.getAttribute('route') == route) {
-
                 rerender();
                 element.innerHTML = template;
                 window.currentRender = element;
@@ -1307,52 +1305,66 @@ class Router {
             Object.keys(this.routes).forEach(async (route) => {
                 const { isMatch, params, query, asterisk } = this.isRouteMatch(this.currentRoute, route);
 
-
                 if (isMatch) {
                     matchingRoute = true;
-
-                    if (Object.keys(query).length > 0 && window.location.hash.includes('?')) {
-                        route = window.location.hash.split('?')[0].replace('#', '');
-                        const routeHandler = this.routes[route];
-                        this.render(route);
-                        await setTimeout(() => { }, 2);  
-                        routeHandler({ params, query });
-                        window.dox = window.dox || {};
-                        return;
-                    } else if (Object.keys(params).length > 0 && !window.location.hash.includes('?')) {
-                        const routeHandler = this.routes[route];
-                        const routeWithoutParams = route.split('/:')[0];
-                        // Render the corresponding route
-                        this.render(routeWithoutParams);
-
-                        await setTimeout(() => { }, 2); // Wait for the DOM to be ready
-                        routeHandler({ params, query });
-
-                        window.dox = window.dox || {};
-
-                        return;
-                    } else if (asterisk) {
-
-                        const routeHandler = this.routes[route];
-                        const routeWithoutAsterisk = route.split('/*')[0];
-                        this.render(routeWithoutAsterisk);
-
-                        await setTimeout(() => { }, 2); // Wait for the DOM to be ready
-
-                        // Pass the asterisk value as a parameter to the route handler
-                        routeHandler({ asterisk });
-
-                        window.dox = window.dox || {};
-
-                        return;
-                    } else {
-                        const routeHandler = this.routes[route];
-                        this.render(route);
+                    let baseRoute = route;
+                    let queries = { ...query };
  
-                        routeHandler({ params, query });
-                        window.dox = window.dox || {};
-                        return;
-                    }
+                    if (
+                        Object.keys(query).length > 0 &&
+                        window.location.hash.includes('?') &&
+                        params
+                      ) {
+                        baseRoute = route.split('?')[0];
+                        route = route.split(':')[0];
+                        this.render(route);
+                      } else if (
+                        Object.keys(query).length > 0 &&
+                        window.location.hash.includes('?') &&
+                        asterisk
+                      ) {
+                        baseRoute = route.split('?')[0];
+                        route = route.split('/*')[0];
+                        this.render(route);
+                      } else if (
+                        Object.keys(params).length > 0 &&
+                        !window.location.hash.includes('?')
+                      ) {
+                        route = route.split(':')[0];
+                        this.render(route);
+                      } else if (
+                        Object.keys(params).length > 0 &&
+                        window.location.hash.includes('?')
+                      ) {
+                        const routeWithoutParams = route.split(':')[0];
+                        this.render(routeWithoutParams);
+                      } else if (
+                        Object.keys(query).length > 0 &&
+                        asterisk
+                      ) {
+                        const routeWithoutQuery = route.split('?')[0];
+                        this.render(routeWithoutQuery);
+                      } else if (asterisk) {
+                        const routeWithoutAsterisk = route.split('/*')[0] ? route.split('/*')[0] : route.split('*')[0];
+                        
+                      
+                      
+                        
+                        this.render(routeWithoutAsterisk);
+                      } else {
+                        this.render(route);
+                      }
+            
+
+                    setTimeout(async () => {
+                        const routeHandler = this.routes[baseRoute];
+                        if (routeHandler) {
+                            await routeHandler({ params, query: queries, asterisk });
+                        }
+                    }, 2);
+
+                    window.dox = window.dox || {};
+                    return;
                 }
             });
         }
@@ -1365,46 +1377,46 @@ class Router {
     isRouteMatch(route, pattern) {
         const routeSegments = route.split('/').filter((segment) => segment !== '');
         const patternSegments = pattern.split('/').filter((segment) => segment !== '');
-
+    
         if (routeSegments.length !== patternSegments.length && !pattern.includes('*')) {
             return { isMatch: false };
         }
-
+    
         const params = {};
         let query = {};
         let asterisk = '';
-
+    
         for (let i = 0; i < patternSegments.length; i++) {
             const routeSegment = routeSegments[i];
             const patternSegment = patternSegments[i];
-
-            if (patternSegment.startsWith(':')) {
+    
+             
+            if (patternSegment.startsWith(':') && !window.location.hash.includes('?')) {
+                
                 const paramName = patternSegment.slice(1);
                 const paramValue = routeSegment;
                 params[paramName] = paramValue;
-            } else if (patternSegment.includes('?')) {
-                const patternSegmentsWithQuery = patternSegment.split('?');
-                const queryStr = patternSegmentsWithQuery[1];
+            }else if (patternSegment.startsWith(':') && window.location.hash.includes('?')) {
+                const paramName = patternSegment.split(':')[1].split('?')[0];
+                const paramValue = routeSegment.split('?')[0];
+                params[paramName] = paramValue;
+                let queryStr = window.location.hash.split('?')[1];
                 query = this.extractQuery(queryStr);
-            } else if (patternSegment.includes('*')) {
-                // Capture the remaining path after the asterisk
+                 
+                 
+            }else if (patternSegment.startsWith('*') && window.location.hash.includes('?')) {
+                asterisk = routeSegments.slice(i).join('/');
+                asterisk = asterisk.split('?')[0];
+                break;
+            } else if (patternSegment.startsWith('*') && !window.location.hash.includes('?')) {
                 asterisk = routeSegments.slice(i).join('/');
                 break;
-            } else if (routeSegment !== patternSegment) {
-                return { isMatch: false };
             }
         }
-
+    
         return { isMatch: true, params, query, asterisk };
     }
-
-
-
-    // Rest of the code remains the same
-
-
-
-
+    
 
     get(route, handler) {
         this.routes[route] = handler;
@@ -1431,41 +1443,20 @@ class Router {
 
         return params;
     }
-    extractQuery(route) {
-        const queryIndex = route.indexOf('?');
-        if (queryIndex !== -1) {
-            const queryStr = route.slice(queryIndex + 1);
-            const queryPairs = queryStr.split('&');
-            const query = {};
 
-            queryPairs.forEach((pair) => {
-                const [key, value] = pair.split('=');
-                query[key] = decodeURIComponent(value); // Decode URI component to handle special characters
-            });
+    extractQuery(queryStr) {
+        const queryPairs = queryStr.split('&');
+        const query = {};
 
-            return query;
-        }
+        queryPairs.forEach((pair) => {
+            const [key, value] = pair.split('=');
+            query[key] = decodeURIComponent(value); // Decode URI component to handle special characters
+        });
 
-        return {};
+        return query;
     }
-    extractAsterics(route) {
-        const queryIndex = route.indexOf('*');
-        // /route/* - returns /route/anything/here/anything/here
-        if (queryIndex !== -1) {
-            const queryStr = route.slice(queryIndex + 1);
-            const queryPairs = queryStr.split('&');
-            const query = {};
-
-            queryPairs.forEach((pair) => {
-                const [key, value] = pair.split('=');
-                query[key] = decodeURIComponent(value); // Decode URI component to handle special characters
-            });
-
-            return query;
-        }
-    }
-
 }
+
 
 imports.map(async (item) => {
     if (!item.endsWith('.html') && !item.endsWith('.css') && !item.endsWith('.js')) {
