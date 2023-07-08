@@ -46,6 +46,26 @@ let props = sessionStorage.getItem('$dox-props') ? JSON.parse(sessionStorage.get
 
 
 
+ 
+ function waitForElm(selector) {
+    return new Promise((resolve) => {
+        if (document.querySelector(selector)) {
+            return resolve(document.querySelector(selector));
+        }
+
+        const observer = new MutationObserver((mutations) => {
+            if (document.querySelector(selector)) {
+                resolve(document.querySelector(selector));
+                observer.disconnect();
+            }
+        });
+
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true,
+        });
+    });
+}
 
 const parser = async (data) => {
     let dom = new DOMParser();
@@ -53,38 +73,8 @@ const parser = async (data) => {
     html = html.body
     let body = document.body
 
-
-    let imports = html.querySelectorAll('import');
-
-    imports.forEach((item) => {
-
-        let file = item.getAttribute('src');
-
-        if (!file.endsWith('.html')) {
-            throw new Error('Unsupported imported file type!');
-        }
-
-        if (!window[file]) {
-
-            fetch(file)
-                .then((response) => {
-                    return response.text();
-                })
-                .then((data) => {
-
-
-                    window[file] = data
-                    setData(data, html, body, item)
-
-                });
-        } else {
-            setData(window[file], html, body, item)
-        }
-
-    });
-
-
-
+ 
+ 
 
     let _export = html.querySelector('export');
 
@@ -92,6 +82,7 @@ const parser = async (data) => {
     let _vars = html.querySelectorAll('var');
 
     _vars.forEach((item) => {
+       
 
         item.style.display = 'none';
         let varName = item.getAttribute('name');
@@ -174,6 +165,122 @@ const parser = async (data) => {
 
         return;
     })
+   
+    
+    async function setData(dhtml) {
+       
+        dhtml = dhtml.body
+        
+      
+        let _vars = dhtml.querySelectorAll('var');
+      
+       
+      
+        for (const item of _vars) {
+          item.style.display = 'none';
+          let varName = item.getAttribute('name');
+          let varValue = item.innerHTML.replace(/\s/g, '');
+          window[varName] = varValue;
+          if (item.html) {
+            window[varName + 'Element'] = item;
+          } else {
+            window[varName + 'Element'] = item;
+          }
+      
+          if (item.hasAttribute('state')) {
+            let state = item.getAttribute('state');
+      
+            if (getState(state) == undefined || getState(state) == null) {
+              setState(state, '');
+            }
+            effect(state, (statev) => {
+              setTimeout(() => {
+                item.innerHTML = statev;
+              }, 0);
+            });
+          }
+          for (const element of dhtml.querySelectorAll('*')) {
+            let matches = element.innerHTML.match(/{{(.*?)}}/g);
+            let attrmatches = element.outerHTML.match(/{{(.*?)}}/g);
+            let original = element.innerHTML;
+            // check if attribute has {{}}
+            if (attrmatches) {
+              for (const match of attrmatches) {
+                let attr = match.split('{{')[1].split('}}')[0];
+                // check if it is from a var
+                if (attr == varName) {
+                  if (element.parentNode) {
+                    element.outerHTML = element.outerHTML.replace(match, varValue);
+                  }
+                }
+              }
+            } else if (matches && element.innerHTML.includes(`{{${varName}}}`)) {
+              for (const match of matches) {
+                window.onmessage = (e) => {
+                  if (e.origin == window.location.origin && e.data.type == 'setVar') {
+                    let name = e.data.name;
+                    let value = e.data.value;
+                    if (item.getAttribute('name') == name) {
+                      window[name] = value;
+                      item.innerHTML = value;
+                    }
+                  }
+                };
+                element.innerHTML = element.innerHTML.replace(match, JSON.parse(item.innerHTML));
+              }
+            } else {
+              window.onmessage = (e) => {
+                if (e.origin == window.location.origin && e.data.type == 'setVar') {
+                  let name = e.data.name;
+                  let value = e.data.value;
+                  if (item.getAttribute('name') == name) {
+                    window[name] = value;
+                    item.innerHTML = value;
+                  }
+                }
+              };
+            }
+          }
+      
+          item.remove();
+        }
+      
+        for (const element of dhtml.querySelectorAll('*')) {
+          if (element.hasAttribute('props')) {
+            let props = element.getAttribute('props').split(':');
+      
+             
+            for (const prop of props) {
+              if (prop === 'children') {
+                if (element.querySelector('slot')) {
+                  if (element.innerHTML.includes('{{children}}')) {
+                    let value = element.querySelector('slot').innerHTML;
+                    element.innerHTML = element.innerHTML.replace('{{children}}', value);
+                  }
+                }
+              } else {
+                let matches = element.innerHTML.match(new RegExp(`{{${prop}}}`, 'g'));
+      
+                if (matches) {
+                  for (const match of matches) {
+                    templates.forEach((template) => {
+                      let dom = new DOMParser();
+                      let html = dom.parseFromString(template.template, 'text/html');
+                      if (html.querySelector(`[${prop}]`)) {
+                        let value = html.querySelector(`[${prop}]`).getAttribute(prop);
+                        element.innerHTML = element.innerHTML.replace(match, value);
+                      }
+                    });
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      
+      
+    window.setData = setData
     if (_export) {
         _export = _export.innerHTML.replace(/\s/g, '');
         _export = _export.split(',');
@@ -317,7 +424,7 @@ const parser = async (data) => {
 
                     if (value) {
                         html.querySelector(element.tagName).setAttribute(prop, value)
-                        rerender()
+                        
                         return methods(element)
                     }
                 }
@@ -387,7 +494,7 @@ const parser = async (data) => {
 
                     if (el) {
                         el.setAttribute(prop, value)
-                        rerender()
+                        
                     }
                     return methods(el)
                 },
@@ -463,28 +570,23 @@ const parser = async (data) => {
 
                 querySelector: (selector) => {
 
-                    let el = document.querySelector(selector)
-
-                    if (el) {
-
-                        el = methods(el);
-
-                    }
-                    return el
+                    return waitForElm(selector).then((elm) => {
+                        return methods(elm)
+                    })
+                    
 
 
                 },
 
                 querySelectorAll: (selector) => {
 
-                    let element = currentRender
-
-                    let els = element.querySelectorAll(selector) || html.querySelectorAll(selector) || body.querySelectorAll(selector) || null;
-                    let elements = [];
-                    els.forEach((item) => {
-                        elements.push(methods(item));
-                    });
-                    return elements;
+                    return waitForElm(selector).then((elm) => {
+                        let elms = document.querySelectorAll(selector);
+                        elms.forEach((item) => {
+                            item = methods(item);
+                        });
+                        return elms;
+                    })
 
                 },
                 html: document.querySelector('html').innerHTML,
@@ -739,292 +841,211 @@ const parser = async (data) => {
                 }, 0)
             })
             html.querySelectorAll('*').forEach(async (element) => {
-
                 if (element.innerHTML.includes('{{')) {
+                  let matches = element.innerHTML.match(/{{(.*?)}}/g);
+                  let original = element.innerHTML;
+              
+                  let matchesWithNewlines = element.innerHTML.match(/{{(.*?)}}/gs);
+                  if (matchesWithNewlines) {
+                    matchesWithNewlines.forEach(async (match) => {
+                      let data = match.split('{{')[1].split('}}}')[0].trim();
+                      if (data.startsWith('map(') && data.endsWith('}}')) {
+                        match = match.replace('&gt;', '>');
+                        let json = data.split('map(')[1].split(')')[0];
+              
+                        let returnMethod = match.split('return(')[1].split('){')[0].trim();
+                        let returnHTML = match.split('){')[1].trim().split('}}')[0].trim();
+                         
+                        returnHTML = returnHTML.replace(/json\./g, '');
+              
+                        let parentElement = document.createElement('div');
+              
+                        async function setData(e) {
+                            let name;
+                            let value;
+                            if (e && e.data && e.data.name == json) {
 
-                    let matches = element.innerHTML.match(/{{(.*?)}}/g);
-                    let original = element.innerHTML;
-                    // if 
-                    if (matches) {
-                        let val = matches[0].split('{{')[1].split('}}')[0];
+                                
+                                parentElement.innerHTML = '';
+                                name = e.data.name;
+                                value = e.data.value;
+                                parsed = JSON.parse(JSON.stringify(window[name]));
+                              
+
+                                let elements = [];
+                                let func
+                                let modifiedData;
+                                if (returnMethod.length > 0) {
+                                    func = new Function('json', `return ${json}.${returnMethod}`);
+                                    modifiedData = func(parsed);
+                                } else {
+                                    modifiedData = parsed;
+                                }
 
 
-                        if (val.includes('json.map(')) {
-                            
-
-                            let json = val.split('json.map(')[1].split(')')[0];
-                             
-                            // value return is like json.map(varName.name).return('li')
-                            // get varName.name
-                            let dotvalue = val.split('json.map(')[1].split(')')[0].split('.')[1];
-                            
-                            json = val.split('json.map(')[1].split(')')[0].split('.')[0];
 
 
-                            if (window[json] || window[json + 'Element']) {
+                                modifiedData.forEach((item) => {
 
-                               
-                                if (val.includes('return')) {
+                                    let divElement;
 
-                                    function setData(html) {
+                                    let embeddedHTML = returnHTML;
 
+                                    Object.entries(item).forEach(([key, value]) => {
+                                        embeddedHTML = embeddedHTML.replace(new RegExp(`{${key}}`, 'g'), value);
+                                      });
 
-                                        element = html
-                                        let container = document.createElement('div');
-                                        let returnVal = val.split('return(')[1].split(')')[0].replace(/'/g, '');
-                                        
-                                        let parsed;
+                                    divElement = embeddedHTML;
+                                     
+                                    parentElement.innerHTML = parentElement.innerHTML + divElement;
+                                    
+                                });
 
-                                        try {
-                                            parsed = JSON.parse(window[json])
+                                function waitForElm(selector) {
+                                    return new Promise(resolve => {
+                                        if (document.querySelector(selector)) {
+                                            return resolve(document.querySelector(selector));
                                         }
-                                        catch (e) {
-                                            console.log(e)
-                                        }
-
-                                        parsed.forEach((item) => {
-                                            
-                                            let newel;
-                                            if (returnVal.includes('[')) {
-                                                let elname = returnVal.split('[')[0];
-                                                let attr = returnVal.split('[')[1].split(']')[0];
-                                                let value = attr.split('=')[1].replace(/'/g, '').replace(/"/g, '');
-                                                let attrname = attr.split('=')[0];
-                                                newel = document.createElement(elname);
-                                                newel.setAttribute(attrname, value);
-                                            } else if (returnVal.includes('.')) {
-                                                newel = document.createElement(returnVal.split('.')[0]);
-                                                let classes = returnVal.split('.');
-
-                                                let style = classes.find((item) => item.includes('style'));
-                                                if (style) {
-                                                    style = style.split('(')[1].split(')')[0].split(';');
-
-                                                    style.forEach((item) => {
-                                                        if (item.trim()) {
-                                                            let [prop, val] = item.split(':');
-                                                            prop = prop.trim();
-                                                            val = val.trim();
-                                                            newel.style[prop] = val;
-                                                        }
-                                                    });
-                                                } else {
-                                                    let classList = classes.find((item) => item.includes('class'));
-                                                    if (classList) {
-                                                        classList = classList.split('(')[1].split(')')[0];
-                                                        newel.className = classList;
-                                                    }
-                                                }
-                                            } else if (returnVal.includes('#')) {
-                                                let id = returnVal.split('#')[1];
-                                                newel = document.createElement(returnVal.split('#')[0]);
-                                                newel.setAttribute('id', id);
-                                            } else {
-                                                newel = document.createElement(returnVal);
+                        
+                                        const observer = new MutationObserver(mutations => {
+                                            if (document.querySelector(selector)) {
+                                                resolve(document.querySelector(selector));
+                                                observer.disconnect();
                                             }
-
-                                            newel.innerHTML = '';
-                                            newel.innerHTML = newel.innerHTML + item[dotvalue];
-                                            container.append(newel);
                                         });
+                        
+                                        observer.observe(document.body, {
+                                            childList: true,
+                                            subtree: true
+                                        });
+                                    });
+                                }
+                                let elm = await waitForElm(`[map="${json}"]`);
 
-                                        element.id = json;
-                                        element.setAttribute('id', matches[0]);
-
-
-                                        if (document.querySelector(element.tagName)) {
-                                            document.querySelector(element.tagName).innerHTML = ''
-                                            document.querySelector(element.tagName).append(container)
-                                            element.innerHTML = element.innerHTML.replace(matches[0], container.innerHTML);
-                                        } else {
-                                            element.innerHTML = element.innerHTML.replace(matches[0], container.innerHTML);
-                                            
-                                        }
+                                
+                                if (elm) {
+                                     
+                                    let container = document.createElement('div');
+                                    container.innerHTML = parentElement.innerHTML;
+                                    container.setAttribute('container-map', json);
+                                    if(!elm.querySelector(`[container-map="${json}"]`)) {
+                                        
+                                         elm.innerHTML = elm.innerHTML + container.innerHTML;
+                                    }else{
+                                        elm.querySelector(`[container-map="${json}"]`).innerHTML = parentElement.innerHTML;
                                     }
+                                } 
+                                document.body.innerHTML = document.body.innerHTML.replace(/{{(.*?)}}/gs, '')
+                                if (document.body.innerHTML.includes('}')) {
+                                    document.body.innerHTML = document.body.innerHTML.replace(/}/g, '')
+                                }
+                            }
 
-                                    if (window[json + 'Element'].innerHTML.length > 0) {
+                           else if (json == name || window[json]) {
+                                
 
-                                        setData(element)
-                                    } else {
-                                        window.onmessage = (e) => {
-                                            if (e.origin == window.location.origin && e.data.type == 'setVar') {
-                                                let name = e.data.name
-                                                let value = e.data.value
+                                parentElement.innerHTML = '';
 
-                                                if (json == name) {
+                                let parsed = JSON.parse(window[json]);
+                              
 
-                                                    window[json] = JSON.stringify(value)
-                                                    setData(element)
-                                                }
+                                let elements = [];
+                                let func
+                                let modifiedData;
+                                if (returnMethod.length > 0) {
+                                    func = new Function('json', `return ${json}.${returnMethod}`);
+                                    modifiedData = func(parsed);
+                                } else {
+                                    modifiedData = parsed;
+                                }
 
+
+
+
+                                modifiedData.forEach((item) => {
+
+                                    let divElement;
+
+                                    let embeddedHTML = returnHTML;
+
+                                    Object.entries(item).forEach(([key, value]) => {
+                                        embeddedHTML = embeddedHTML.replace(new RegExp(`{${key}}`, 'g'), value);
+                                      });
+
+                                    divElement = embeddedHTML;
+                                     
+                                    parentElement.innerHTML = parentElement.innerHTML + divElement;
+                                    
+                                });
+
+                                function waitForElm(selector) {
+                                    return new Promise(resolve => {
+                                        if (document.querySelector(selector)) {
+                                            return resolve(document.querySelector(selector));
+                                        }
+                        
+                                        const observer = new MutationObserver(mutations => {
+                                            if (document.querySelector(selector)) {
+                                                resolve(document.querySelector(selector));
+                                                observer.disconnect();
                                             }
-                                        }
+                                        });
+                        
+                                        observer.observe(document.body, {
+                                            childList: true,
+                                            subtree: true
+                                        });
+                                    });
+                                }
+                                let elm = await waitForElm(`[map="${json}"]`);
+
+                                
+                                if (elm) {
+                                     
+                                    let container = document.createElement('div');
+                                    container.innerHTML = parentElement.innerHTML;
+                                    container.setAttribute('container-map', json);
+                                    if(!elm.querySelector(`[container-map="${json}"]`)) {
+                                        
+                                         elm.innerHTML = elm.innerHTML + container.innerHTML;
+                                    }else{
+                                        elm.querySelector(`[container-map="${json}"]`).innerHTML = parentElement.innerHTML;
                                     }
-
-
-
-
-
-
-
-
-
-
-
-
+                                } 
+                                document.body.innerHTML = document.body.innerHTML.replace(/{{(.*?)}}/gs, '')
+                                if (document.body.innerHTML.includes('}')) {
+                                    document.body.innerHTML = document.body.innerHTML.replace(/}/g, '')
                                 }
                             }
                         }
-
-                    }
-
-                    let matchesWithNewlines = element.innerHTML.match(/{{(.*?)}}/gs);
-                    if (matchesWithNewlines) {
-                        matchesWithNewlines.forEach((match) => {
-                            let data = match.split('{{')[1].split('}}')[0];
-                            if (data.includes('map') && !data.includes('json.map')) {
-                                match = match.replace('&gt;', '>')
-
-                                let dom = new DOMParser();
-                                let json = data.split('map(')[1].split(')')[0];
-                                // .return(filter(sale_price => sale_price.length > 1 )) get the ()
-                                let returnMethod = data.split('return(')[1].split(')')[0];
-
-                                returnMethod = returnMethod.replace('&gt;', '>').replace('&gt;', '>')
-
-                                let returnHTML = match.split('){')[1].trim().split('}}')[0].trim();
-                                returnHTML = returnHTML
-                                let html = dom.parseFromString(returnHTML, 'text/html');
-
-                                // div class="card" if any attributes it should only grab div
-                                let firstElement =  returnHTML.split(' ')[0].split('<')[1]
-                                
-
-                                let parentElement = document.createElement('div');
-
-                                async function setData(e) {
-                                    let name;
-                                    let value;
-                                    if (e && e.data) {
-                                        name = e.data.name;
-                                        value = e.data.value;
-                                    }
-
-                                    if (json == name || window[json]) {
-                                        if (e && e.data) {
-                                            window[json] =  JSON.stringify(value)
-
-                                        } 
-
-                                        parentElement.innerHTML = '';
-
-                                        let parsed = JSON.parse(window[json]);
-                                      
-
-                                        let elements = [];
-                                        let func
-                                        let modifiedData;
-                                        if (returnMethod.length > 0) {
-                                            func = new Function('json', `return ${json}.${returnMethod})`);
-                                            modifiedData = func(parsed);
-                                        } else {
-                                            modifiedData = parsed;
-                                        }
- 
-
-
- 
-                                        modifiedData.forEach((item) => {
-
-                                            let divElement;
-
-                                            let embeddedHTML = html.body.innerHTML;
-
-                                            Object.entries(item).forEach(([key, value]) => {
-                                                embeddedHTML = embeddedHTML.replace(new RegExp(`{${json}.${key}}`, 'g'), value);
-                                            });
-
-                                            divElement = embeddedHTML;
-                                             
-                                            parentElement.innerHTML = parentElement.innerHTML + divElement;
-                                            
-                                        });
-
-                                        function waitForElm(selector) {
-                                            return new Promise(resolve => {
-                                                if (document.querySelector(selector)) {
-                                                    return resolve(document.querySelector(selector));
-                                                }
-                                
-                                                const observer = new MutationObserver(mutations => {
-                                                    if (document.querySelector(selector)) {
-                                                        resolve(document.querySelector(selector));
-                                                        observer.disconnect();
-                                                    }
-                                                });
-                                
-                                                observer.observe(document.body, {
-                                                    childList: true,
-                                                    subtree: true
-                                                });
-                                            });
-                                        }
-                                        let elm = await waitForElm(`[map="${json}"]`);
-
-                                        
-                                        if (elm) {
-                                             
-                                            let container = document.createElement('div');
-                                            container.innerHTML = parentElement.innerHTML;
-                                            container.setAttribute('container-map', json);
-                                            if(!elm.querySelector(`[container-map="${json}"]`)) {
-                                                
-                                                 elm.innerHTML = elm.innerHTML + container.innerHTML;
-                                            }else{
-                                                elm.querySelector(`[container-map="${json}"]`).innerHTML = parentElement.innerHTML;
-                                            }
-                                        } 
-                                        document.body.innerHTML = document.body.innerHTML.replace(/{{(.*?)}}/gs, '')
-                                        if (document.body.innerHTML.includes('}')) {
-                                            document.body.innerHTML = document.body.innerHTML.replace(/}/g, '')
-                                        }
-                                    }
-                                }
-
-                              
-                                if (window[json]) {
-                                    setData();
-                                }  
-
-                                window.addEventListener('message', (e) => {
-                                    if (e.origin == window.location.origin && e.data.type == 'setVar') {
-                                        setData(e);
-                                    }
-                                });
-
-
-                            }
-
-
+                        document.body.innerHTML = document.body.innerHTML.replace(/{{(.*?)}}/gs, '');
+                      
+              
+                       setData();
+              
+                        window.addEventListener('message', (e) => {
+                          if (e.origin == window.location.origin && e.data.type == 'setVar') {
+                            
+                            console.log(e.data)
+                            setData(e);
+                          }
                         });
-                    }
-
-
-
-
-
-
-
-
+                      }
+                    });
+                  }
                 }
+              });
+              
+              
+              
+             
+              
 
-            });
 
 
+            let modules = html.querySelectorAll('import');
 
-
-            window.rerender = rerender
-
+            
 
             if (html.querySelector(item).hasAttribute('props')) {
                 let el = html.querySelector(item)
@@ -1077,54 +1098,15 @@ const parser = async (data) => {
                     parent: document.querySelector(item).parentNode,
                     template: template.innerHTML,
                     html: html,
-                    body: body
+                    file: item,
+                    body: body,
+                    imports: html.querySelectorAll('import'),
                 });
+                
             }
-            rerender()
+           
 
-
-
-            function rerender(ele) {
-
-
-                let element = html.querySelector(item);
-                if (element) {
-
-                    let modules = html.querySelectorAll('import')
-
-                    modules.forEach(async (item) => {
-                        let file = item.getAttribute('src');
-
-                        if (!file.endsWith('.html')) {
-                            throw new Error('Unsupported imported file type!');
-                        }
-
-                        if (!window[file]) {
-
-
-                            fetch(file)
-                                .then((response) => {
-                                    return response.text();
-                                })
-                                .then(async (data) => {
-
-                                    await setTimeout(() => { }, 0)
-                                    window[file] = data
-                                    setData(data, html, document.body, item)
-                                })
-                            return;
-
-                        } else {
-
-                            await setTimeout(() => { }, 0)
-                            setData(window[file], html, document.body, item)
-                        }
-
-                    });
-                }
-
-
-            }
+ 
 
 
 
@@ -1243,6 +1225,7 @@ const parser = async (data) => {
 
         checkType()
 
+        window.checkType = checkType
 
     });
 
@@ -1265,6 +1248,7 @@ class Router {
         // Attach event listeners to handle hash changes and DOMContentLoaded
         window.addEventListener('hashchange', () => {
             this.route();
+            
         });
         window.addEventListener('DOMContentLoaded', () => {
             this.route();
@@ -1281,20 +1265,115 @@ class Router {
     }
 
     render(route) {
+         
        
-        templates.forEach((item) => {
+        templates.forEach(async (item) => {
+    
+         
             let parent = item.parent;
+         
             let template = item.template;
+           
             let element = item.element;
 
-            let title = parent.getAttribute('title');
-            if (title) {
-                document.title = title;
-            }
+           
+            
             if (parent.getAttribute('route') == route) {
-                rerender();
-                element.innerHTML = template;
+                
+
+                
+                
+                element.innerHTML = '';
                 window.currentRender = element;
+                async function waitForElm(selector){
+                    return new Promise((resolve) => {
+                      if (document.querySelector(selector)) {
+                        return resolve(document.querySelector(selector));
+                      }
+                  
+                      const observer = new MutationObserver((mutations) => {
+                        if (document.querySelector(selector)) {
+                          resolve(document.querySelector(selector));
+                          observer.disconnect();
+                        }
+                      });
+                  
+                      observer.observe(document.body, {
+                        childList: true,
+                        subtree: true,
+                      });
+                    });
+                }
+                await waitForElm(element.tagName)
+                if(item.imports.length > 0){
+                    
+                item.imports.forEach(async (item) => {
+                    
+                    let src = item.getAttribute('src');
+                    let exports = item.getAttribute('exports').split(',');
+                  
+                    let data;
+                    if(!window[src]) {
+                        data = await  fetch(src).then((res) => res.text())
+ 
+                        window[src] = data
+                    }
+                   
+
+                    let dom = new DOMParser();
+                    let dhtml = dom.parseFromString(window[src], 'text/html');
+                    await setData(dhtml)
+                    let body = dhtml.querySelector('body');
+                    
+                    let newdom = dom.parseFromString(template, 'text/html');
+                    let newbody = newdom.querySelector('body');
+                     
+                    exports.forEach((item) => {
+                        if(body.querySelector(item)) {
+                            let el = body.querySelector(item)
+                            let html = el.innerHTML;
+                            dhtml.querySelector(item).innerHTML = html;
+                             
+
+                             
+                            
+                           
+                          
+                            newbody.querySelector(item).innerHTML = html;
+                            template = newbody.innerHTML;
+                            
+                        }
+                    })
+                    
+                     document.title = parent.getAttribute('title');
+                     await setTimeout(() => {
+                        window.checkType()
+                        element.innerHTML = template;
+                         
+                         
+                     }, 5)
+                     
+                 
+                 
+                     
+
+                })
+                }
+                else{
+                    
+                    document.title = parent.getAttribute('title');
+                    await setTimeout(() => {
+                        window.checkType()
+                        element.innerHTML = template;
+                    }, 5)
+
+                    }
+                     
+
+               
+                
+                
+                
             } else {
                 element.innerHTML = '';
             }
@@ -1363,14 +1442,20 @@ class Router {
                         const routeHandler = this.routes[baseRoute];
                         if (routeHandler) {
                             await routeHandler({ params, query: queries, asterisk });
+                             window.dox = dox;
                         }
+                         
                     }, 2);
 
-                    window.dox = window.dox || {};
+                   
                     return;
+                }else{
+                    this.render('404')
+                    
+                   
                 }
             });
-        }
+        } 
 
         if (!matchingRoute && this.fallbackRoute) {
             window.location.hash = '#' + this.fallbackRoute;
@@ -1529,333 +1614,10 @@ imports.map(async (item) => {
         }
     }
 });
-async function setData(data, html, body, item) {
-    let exported = item.getAttribute('exports').split(',');
-    let importName = item.getAttribute('exports').split(',');
-    let dom = new DOMParser();
-    let dhtml = await dom.parseFromString(data, 'text/html').body
-
-
-
-
-    let props = {};
-
-    let parsedjs = (code, parent) => {
-        let style;
-        if (code.includes('style')) {
-            // style.propertie = value     // ex:   {{style.background = "red"}}
-            style = code.split('.')
-            // get propterie and value
-            let prop = style[1].split('=')[0]
-            let value = style[1].split('=')[1]
-
-            dhtml.querySelector(parent.tagName).style[prop] = value
-            body.querySelector(parent.tagName).style[prop] = value
-        } else {
-            if (code.includes('{{')) {
-                let value = code.split('{{')[1].split('}}')[0]
-                eval(value)
-            }
-        }
-        if (code.includes('parent')) {
-
-        }
-    }
-    dhtml.querySelectorAll('[state]').forEach((element) => {
-        let state = element.getAttribute('state')
-
-        element.id = state
-        if (getState(state) == undefined || getState(state) == null) {
-            setState(state, '')
-        }
-        element.innerHTML = element.innerHTML + getState(state)
-
-        setTimeout(() => {
-            effect((state), (statev) => {
-
-                setTimeout(() => {
-                    if (element.tagName == 'INPUT' || element.tagName == 'TEXTAREA') element.value = statev;
-                    if (element.tagName == 'SELECT') element.value = statev;
-                    if (element.tagName == 'IMG') element.src = statev;
-                    if (element.tagName == 'A') element.href = statev;
-                    if (element.tagName == 'IFRAME') element.src = statev;
-                    if (element.tagName == 'VIDEO') element.src = statev;
-                    if (element.tagName == 'AUDIO') element.src = statev;
-                    if (element.tagName == 'EMBED') element.src = statev;
-                    if (element.tagName == 'OBJECT') element.src = statev;
-                    if (element.tagName == 'SOURCE') element.src = statev;
-                    if (element.tagName == 'TRACK') element.src = statev;
-                    else element.innerHTML = statev;
-                    document.querySelector(`#${state}`).innerHTML = statev
-                }, 0)
-            })
-        }, 0)
-    })
-    if (dhtml.querySelector('if')) {
-        let el = dhtml.querySelector('if')
-
-        let prop = el.getAttribute('prop') ? el.getAttribute('prop') : null
-        let is = el.getAttribute('is')
-        let elseis = el.getAttribute('else')
-        let elparent = el.parentNode
-        let parentprops = el.getAttribute('props') ? el.getAttribute('props').split(',') : null
-
-        let rendered = html.querySelector(elparent.tagName)
-        if (prop && parentprops) {
-            parentprops.forEach((item) => {
-
-                let propvalue = rendered.getAttribute(prop)
-                if (propvalue == is) {
-                    let template = el.innerHTML
-                    if (template.includes('{{')) {
-                        let value = template.split('{{')[1].split('}}')[0]
-                        parsedjs(value, elparent)
-                    }
-                }
-
-            })
-        }
-
-    }
-    dhtml.querySelectorAll('var').forEach((item) => {
-
-        item.style.display = 'none';
-        let varName = item.getAttribute('name');
-        let varValue = item.innerHTML;
-
-
-
-        dhtml.querySelectorAll('*').forEach((element) => {
-            let matches = element.innerHTML.match(/{{(.*?)}}/g);
-            if (matches && element.innerHTML.includes(`{{${varName}}}`)) {
-                element.id = varName
-                let original = element.innerHTML;
-
-                matches.forEach((match) => {
-
-
-                    element.innerHTML = element.innerHTML.replace(match, varValue)
-
-                });
-            }
-        });
-
-        item.remove();
-        return;
-    });
-    dhtml.querySelectorAll('*').forEach((element) => {
-        // check if element has {{json.map(varName).return('li')}}
-        if (element.innerHTML.includes('{{')) {
-             
-            let matches = element.innerHTML.match(/{{(.*?)}}/g);
-            if (matches) {
-                let val = matches[0].split('{{')[1].split('}}')[0]
-                if (val.includes('json.map')) {
-                    let json = val.split('json.map(')[1].split(')')[0]
-                  
-                    if (window[json]) {
-                        if (val.includes('return')) {
-                            let returnVal = val.split('return(')[1].split(')')[0].replace(/'/g, '')
-                            let parsed = JSON.parse(window[json])
-                            parsed.forEach((item) => {
-
-                                let newel = document.createElement(returnVal)
-
-                                newel.innerHTML = newel.innerHTML + item.name
-                                element.innerHTML = newel.outerHTML
-                            })
-
-
-                        }
-
-                    }
-
-                }
-            }
-        }
-    });
-
-
-    let proptemplates = []
-
-    dhtml.querySelectorAll('[props]').forEach(async (item) => {
-
-        let name = item.tagName;
-        if (html.querySelector(name)) {
-            let $props = item.getAttribute('props').split(':');
-            $props.forEach(async (prop) => {
-                props[name] = $props;
-                sessionStorage.setItem('$dox-props', JSON.stringify(props))
-
-                if (prop == 'children') {
-
-                    if (html.querySelector(name).querySelector('slot')) {
-                        if (dhtml.querySelector(name).innerHTML.includes('{{children}}')) {
-                            if (proptemplates.length > 0) {
-                                proptemplates.forEach((item) => {
-                                    if (item.parent == dhtml.querySelector(name).parentNode) {
-                                        dhtml.querySelector(name).innerHTML = item.template
-                                    }
-                                })
-
-                            }
-                            proptemplates.push({
-                                element: dhtml.querySelector(name),
-                                template: dhtml.querySelector(name).innerHTML,
-                                parent: dhtml.querySelector(name).parentNode ? dhtml.querySelector(name).parentNode : null,
-                            })
-
-
-                            dhtml.querySelector(name).innerHTML = dhtml.querySelector(name).innerHTML.replace(`{{children}}`, html.querySelector(name).querySelector('slot').innerHTML);
-
-
-
-                        }
-                    }
-                } else {
-                    if (html.querySelector(name).getAttribute(prop)) {
-
-                        if (proptemplates.length > 0) {
-                            proptemplates.forEach((item) => {
-
-                                if (dhtml.querySelector(name).innerHTML.includes(`{{${prop}}}`)) {
-                                    dhtml.querySelector(name).innerHTML = dhtml.querySelector(name).innerHTML.replace(`{{${prop}}}`, html.querySelector(name).getAttribute(prop));
-
-                                }
-                            })
-
-                        }
-                        if (dhtml.querySelector(name).innerHTML.includes(`{{${prop}}}`)) {
-                            proptemplates.push({
-                                element: dhtml.querySelector(name),
-                                template: dhtml.querySelector(name).innerHTML,
-                                parent: dhtml.querySelector(name).parentNode ? dhtml.querySelector(name).parentNode : null,
-                            })
-
-                            let value = html.querySelector(name).getAttribute(prop);
-                            dhtml.querySelector(name).innerHTML = dhtml.querySelector(name).innerHTML.replace(`{{${prop}}}`, value);
-                        }
-                    }
-                }
-            });
-        }
-    });
-    dhtml.querySelectorAll('*').forEach((element) => {
-
-
-
-
-        let attributes = Object.values(element.attributes);
-
-
-        attributes.forEach((attr) => {
-
-            let attrValue = attr.value;
-
-            if (attrValue.includes('{{')) {
-                let matches = attrValue.match(/{{(.*?)}}/g);
-
-                if (matches) {
-                    matches.forEach((match) => {
-                        let value = match.replace('{{', '').replace('}}', '');
-                        let prop = element.parentNode.getAttribute(value);
-                        let parent = document.querySelector(element.parentNode.tagName);
-                        if (parent && parent.getAttribute(value)) {
-                            prop = parent.getAttribute(value);
-                        }
-                        attrValue = attrValue.replace(new RegExp(`{{${value}}}`, 'g'), prop);
-                    });
-                    element.setAttribute(attr.name, attrValue);
-                }
-            }
-        });
-        let matches = element.innerHTML.match(/{{(.*?)}}/g);
-
-        if (matches) {
-            matches.forEach((match) => {
-
-                let value = match.split('{{')[1].split('}}')[0];
-                let el = dhtml.querySelector(element.tagName);
-                let parent = el.parentNode.tagName;
-                html.querySelectorAll('*').forEach((item) => {
-                    if (item.tagName == parent) {
-                        let prop = item.getAttribute(value);
-                        if (prop) {
-                            if (prop.toString().toLowerCase() == 'true') {
-                                prop = prop.toString().toLowerCase();
-                            }
-                            let attrValue = element.innerHTML.replace(new RegExp(`{{${value}}}`, 'g'), prop);
-                            element.innerHTML = attrValue;
-                        }
-                    }
-                });
-            });
-        }
-        if (element.hasAttribute('state')) {
-            let state = element.getAttribute('state')
-
-
-            element.innerHTML = element.innerHTML + getState(state)
-            if (document.querySelector(element.tagName)) {
-                document.querySelector(element.tagName).innerHTML = element.innerHTML
-            }
-            effect((state), (state) => {
-                if (document.querySelector(element.tagName)) {
-                    document.querySelector(element.tagName).innerHTML = state
-                }
-            })
-        }
-
-    });
-
-
-
-
-
-
-
-
-    exported.forEach(async (exportItem) => {
-
-        let el = dhtml.querySelector(exportItem) ? dhtml.querySelector(exportItem) : html.querySelector(exportItem)
-
-
-        function waitForElm(selector) {
-            return new Promise(resolve => {
-                if (document.querySelector(selector)) {
-                    return resolve(document.querySelector(selector));
-                }
-
-                const observer = new MutationObserver(mutations => {
-                    if (document.querySelector(selector)) {
-                        resolve(document.querySelector(selector));
-                        observer.disconnect();
-                    }
-                });
-
-                observer.observe(document.body, {
-                    childList: true,
-                    subtree: true
-                });
-            });
-        }
-        let elm = await waitForElm(exportItem)
-
-
-        elm.innerHTML = el.innerHTML
-
-
-
-
-    });
-
-
-
-
-}
+ 
 
 window.Router = Router;
-window.dox = dox;
+ 
 
 
 const states = {};
