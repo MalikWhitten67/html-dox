@@ -1218,7 +1218,7 @@ class Router {
                  
                 window.currentRender = element;
                 let dom = new DOMParser().parseFromString(template, 'text/html');
-                dom.body.innerHTML =dom.body.innerHTML.replace(/{{(.*?)}}}/gs, '');
+                dom.body.innerHTML = dom.body.innerHTML.replace(/{{(.*?)}}}/gs, '');
                
                
                 element.innerHTML =  dom.body.innerHTML;
