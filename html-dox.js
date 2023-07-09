@@ -91,7 +91,7 @@ imports.map((item) => {
         let preload = document.createElement('link');
         preload.setAttribute('rel', 'preload');
         preload.setAttribute('href', item);
-        preload.type = 'text/html';
+       
         preload.setAttribute('as', 'document');
         document.querySelector('head').appendChild(preload);
 
@@ -104,7 +104,7 @@ imports.map((item) => {
                 })
                 .then(async (data) => {
                     cache[item] = data;
-                    await parser(data);
+                     parser(data);
                 });
         }
     }
@@ -115,274 +115,291 @@ const parser = async (data) => {
     let html = dom.parseFromString(data, 'text/html');
     html = html.body
     let body = document.body
-    let _vars = html.querySelectorAll('var');
+    
+    
 
-    _vars.forEach((item) => {
-
-      
-          
-        let varName = item.getAttribute('name');
-        let varValue = item.innerHTML;
-        if(item.innerHTML.length  > 0){
-            window[varName] = varValue;
-          
-        }else{
-            window[varName] = ''
+     
+    html.querySelectorAll('*').forEach((item) => {
+         
+        if (item.innerHTML.includes('{{')) {
+            let matchesWithNewlines = item.innerHTML.match(/{{(.*?)}}/gs);
+            if (matchesWithNewlines) {
+              matchesWithNewlines.forEach(async (match) => {
+                  let data = match.split('{{')[1].split('}}}')[0].trim();
+                  if (data.startsWith('map(') && data.endsWith('}}')) {
+                    match = match.replace('&gt;', '>');
+                     
+                    let json = data.split('map(')[1].split(')')[0];
+                
+                    let returnMethod = match.split('return(')[1].split('){')[0].trim();
+                    let returnHTML = match.split('){')[1].trim().split('}}')[0].trim();
+                    returnHTML = returnHTML.replace(/json\./g, '');
+                
+                    let parentElement = document.createElement('div');
+                
+                    async function setData(e) {
+                      let name;
+                      let value;
+                      if (e) {
+                        parentElement.innerHTML = '';
+                        name = e.data.data.name;
+                        value = e.data.data.value;
+                     
+                        parsed =  JSON.parse(JSON.stringify(value))
+                
+                        let func;
+                        let modifiedData;
+                        if (returnMethod.length > 0) {
+                          func = new Function('json', `return ${json}.${returnMethod}`);
+                          modifiedData = func(parsed);
+                        } else {
+                          modifiedData = parsed;
+                        }
+                
+                        modifiedData.forEach((item) => {
+                          console.log(item)
+                          let divElement;
+                          let embeddedHTML = returnHTML;
+                          let dom = new DOMParser();
+                          let html = dom.parseFromString(embeddedHTML, 'text/html');
+                   
+                           
+                          let match =  html.body.outerHTML.match(/{(.*?)}/gs);
+                          match.forEach((it) => {
+                              
+                              let vv = it.split(`{${json}.`)[1].split('}')[0]
+                           
+                              html.body.innerHTML = html.body.innerHTML.replace(`{${json}.${vv}}`,   item[vv])
+                              embeddedHTML = html.body.innerHTML
+                            });
+                            
+  
+                        
+                          divElement = embeddedHTML;
+                          parentElement.innerHTML = parentElement.innerHTML + divElement;
+                        });
+                        
+                        
+                        function waitForElm(selector) {
+                            return new Promise((resolve) => {
+                                if (document.querySelector(selector)) {
+                                return resolve(document.querySelector(selector));
+                                }
+                    
+                                const observer = new MutationObserver((mutations) => {
+                                if (document.querySelector(selector)) {
+                                    resolve(document.querySelector(selector));
+                                    observer.disconnect();
+                                }
+                                });
+                    
+                                observer.observe(document.body, {
+                                childList: true,
+                                subtree: true,
+                                });
+                            });
+                        }
+                         
+                        await waitForElm(`[map="${json}"]`);
+                        let elm =  document.querySelector(`[map="${json}"]`);
+                
+                        
+                        
+                        if (elm) {
+                          if (elm.innerHTML.length == 0) {
+                            elm.innerHTML = parentElement.innerHTML;
+                          } else if (elm.innerHTML.length > 0) {
+                            if (!elm.querySelector(`[container-map="${json}"]`)) {
+                              let container = document.createElement('div');
+                              container.innerHTML = parentElement.innerHTML;
+                              container.setAttribute('container-map', json);
+                             
+                            } else {
+                              console.log(elm.querySelector(`[container-map="${json}"]`))
+                              elm.querySelector(`[container-map="${json}"]`).innerHTML = parentElement.innerHTML;
+                              
+                            }
+                          }
+                        }
+                        
+                       
+                         
+                         
+                      } else if (window[json]) {
+                        parentElement.innerHTML = '';
+                
+                        let parsed = JSON.parse(window[json]);
+                        console.log(parsed);
+                
+                        let elements = [];
+                        let func;
+                        let modifiedData;
+                        if (returnMethod.length > 0) {
+                          func = new Function('json', `return ${json}.${returnMethod}`);
+                          modifiedData = func(parsed);
+                        } else {
+                          modifiedData = parsed;
+                        }
+                
+                        modifiedData.forEach((item) => {
+                          let divElement;
+                          let embeddedHTML = returnHTML;
+                
+                          Object.entries(item).forEach(([key, value]) => {
+                            embeddedHTML = embeddedHTML.replace(new RegExp(`{${key}}`, 'g'), value);
+                          });
+                
+                          divElement = embeddedHTML;
+                          parentElement.innerHTML = parentElement.innerHTML + divElement;
+                        });
+                
+                        function waitForElm(selector) {
+                          return new Promise((resolve) => {
+                            if (document.querySelector(selector)) {
+                              return resolve(document.querySelector(selector));
+                            }
+                
+                            const observer = new MutationObserver((mutations) => {
+                              if (document.querySelector(selector)) {
+                                resolve(document.querySelector(selector));
+                                observer.disconnect();
+                              }
+                            });
+                
+                            observer.observe(document.body, {
+                              childList: true,
+                              subtree: true,
+                            });
+                          });
+                        }
+                
+                      
+                        let elm =  document.querySelector(`[map="${json}"]`);
+                     
+                
+                        
+                        if (elm) {
+                          if (elm.innerHTML.length == 0) {
+                            elm.innerHTML = parentElement.innerHTML;
+                          } else if (elm.innerHTML.length > 0) {
+                            if (!elm.querySelector(`[container-map="${json}"]`)) {
+                              let container = document.createElement('div');
+                              container.innerHTML = parentElement.innerHTML;
+                              container.setAttribute('container-map', json);
+                              elm.appendChild(container);
+                            } else {
+                              elm.querySelector(`[container-map="${json}"]`).innerHTML = parentElement.innerHTML;
+                            }
+                          }
+                        }
+                        document.querySelector(`[map="${json}"]`).style.display = 'block'
+                          
+                      }
+                       
+                    }
+                
+                    setData();
+                
+                    window.addEventListener('message', (e) => {
+                      if (e.origin == window.location.origin && e.data.type == 'setVar') {
+                        
+                        html.querySelectorAll('[var]').forEach((item) => {
+                          let varName = item.getAttribute('var');
+                          let varValue = item.innerHTML;
+                          window[varName] = varValue;
+                          item.remove();
+                        });
+                                
+                        setData(e);
+                      }
+                    });
+                  }
+                  
+                });
+            }
+          }
+        if(item.tagName == 'import') {
+            let file = item.getAttribute('src');
+            if (!file.endsWith('.html')) {
+                throw new Error('Unsupported imported file type!');
+            }
+    
+            if (!window[file]) {
+    
+                fetch(file)
+                    .then((response) => {
+                        return response.text();
+                    })
+                    .then((data) => {
+    
+    
+                        window[file] = data
+                        setData(data, html, body, item)
+    
+                    });
+            } else {
+                setData(window[file], html, body, item)
+            }
         }
-       
-        
-       
+        if(item.tagName == 'var'){
+   
+            let varName = item.getAttribute('name');
+            let varValue = item.innerHTML;
+            if(item.innerHTML.length  > 0){
+                window[varName] = varValue;
+              
+            }else{
+                window[varName] = ''
+            }
+
+                 
         html.innerHTML = html.innerHTML.replace(`{{${varName}}}`, varValue);
         item.remove();
         return;
-    })
-    html.querySelectorAll('*').forEach(async (element) => {
-        if (element.innerHTML.includes('{{')) {
-          let matchesWithNewlines = element.innerHTML.match(/{{(.*?)}}/gs);
-          if (matchesWithNewlines) {
-            matchesWithNewlines.forEach(async (match) => {
-              let data = match.split('{{')[1].split('}}}')[0].trim();
-              if (data.startsWith('map(') && data.endsWith('}}')) {
-                match = match.replace('&gt;', '>');
-                let json = data.split('map(')[1].split(')')[0];
-      
-                let returnMethod = match.split('return(')[1].split('){')[0].trim();
-                let returnHTML = match.split('){')[1].trim().split('}}')[0].trim();
-                returnHTML = returnHTML.replace(/json\./g, '');
-      
-                let parentElement = document.createElement('div');
-      
-                async function setData(e) {
-                  let name;
-                  let value;
-                  if (e && e.data && e.data.name == json) {
-                    parentElement.innerHTML = '';
-                    name = e.data.name;
-                    value = e.data.value;
-                    parsed = JSON.parse(JSON.stringify(window[name]));
-      
-                    let elements = [];
-                    let func;
-                    let modifiedData;
-                    if (returnMethod.length > 0) {
-                      func = new Function('json', `return ${json}.${returnMethod}`);
-                      modifiedData = func(parsed);
-                    } else {
-                      modifiedData = parsed;
-                    }
-      
-                    modifiedData.forEach((item) => {
-                      let divElement;
-                      let embeddedHTML = returnHTML;
-      
-                      Object.entries(item).forEach(([key, value]) => {
-                        embeddedHTML = embeddedHTML.replace(new RegExp(`{${key}}`, 'g'), value);
-                      });
-      
-                      divElement = embeddedHTML;
-                      parentElement.innerHTML = parentElement.innerHTML + divElement;
-                    });
-      
-                    function waitForElm(selector) {
-                      return new Promise((resolve) => {
-                        if (document.querySelector(selector)) {
-                          return resolve(document.querySelector(selector));
-                        }
-      
-                        const observer = new MutationObserver((mutations) => {
-                          if (document.querySelector(selector)) {
-                            resolve(document.querySelector(selector));
-                            observer.disconnect();
-                          }
-                        });
-      
-                        observer.observe(document.body, {
-                          childList: true,
-                          subtree: true,
-                        });
-                      });
-                    }
-      
-                    let elm = await waitForElm(`[map="${json}"]`);
-      
-                    if (elm) {
-                      let container = document.createElement('div');
-                      container.innerHTML = parentElement.innerHTML;
-                      container.setAttribute('container-map', json);
-      
-                      if (!elm.querySelector(`[container-map="${json}"]`)) {
-                        elm.appendChild(container);
-                      } else {
-                        elm.querySelector(`[container-map="${json}"]`).innerHTML = parentElement.innerHTML;
-                      }
-                    }
-      
-                     
-                    if(html.innerHTML.includes('{{')){
-                        html.innerHTML = html.innerHTML.replace(/{{(.*?)}}/gs, '');
-                      }
-                  } else if (window[json]) {
-                    parentElement.innerHTML = '';
-      
-                    let parsed = JSON.parse(window[json]);
-      
-                    let elements = [];
-                    let func;
-                    let modifiedData;
-                    if (returnMethod.length > 0) {
-                      func = new Function('json', `return ${json}.${returnMethod}`);
-                      modifiedData = func(parsed);
-                    } else {
-                      modifiedData = parsed;
-                    }
-      
-                    modifiedData.forEach((item) => {
-                      let divElement;
-                      let embeddedHTML = returnHTML;
-      
-                      Object.entries(item).forEach(([key, value]) => {
-                        embeddedHTML = embeddedHTML.replace(new RegExp(`{${key}}`, 'g'), value);
-                      });
-      
-                      divElement = embeddedHTML;
-                      parentElement.innerHTML = parentElement.innerHTML + divElement;
-                    });
-      
-                    function waitForElm(selector) {
-                      return new Promise((resolve) => {
-                        if (document.querySelector(selector)) {
-                          return resolve(document.querySelector(selector));
-                        }
-      
-                        const observer = new MutationObserver((mutations) => {
-                          if (document.querySelector(selector)) {
-                            resolve(document.querySelector(selector));
-                            observer.disconnect();
-                          }
-                        });
-      
-                        observer.observe(document.body, {
-                          childList: true,
-                          subtree: true,
-                        });
-                      });
-                    }
-      
-                    let elm = await waitForElm(`[map="${json}"]`);
-      
-                    
-                    if (elm) {
-                      if (elm.innerHTML.length == 0) {
-                        elm.innerHTML = parentElement.innerHTML;
-                      } else if (elm.innerHTML.length > 0) {
-                        if (!elm.querySelector(`[container-map="${json}"]`)) {
-                          let container = document.createElement('div');
-                          container.innerHTML = parentElement.innerHTML;
-                          container.setAttribute('container-map', json);
-                          elm.appendChild(container);
-                        } else {
-                          elm.querySelector(`[container-map="${json}"]`).innerHTML = parentElement.innerHTML;
-                        }
-                      }
-                    }
-                    
-                      
-                  }
-                }
-      
-                setData();
-      
-                window.addEventListener('message', (e) => {
-                  if (e.origin == window.location.origin && e.data.type == 'setVar') {
-                    
-                    html.querySelectorAll('var').forEach((item) => {
-                        
-                      
-                        if (item.hasAttribute('typeof')) {
-                          let type = item.getAttribute('typeof').split('{{:')[1].split('}}')[0];
-                          let value =  e.data.data.value;
-                      
-                          if (type === '<Json>') {
-                            try {
-                              let parsedValue = JSON.parse(value);
-                               
-                            } catch (error) {
-                              throw new Error(`Invalid value for type "${type}": ${value} (expected JSON)`);
-                            }
-                          } else if (type === '<String>') {
-                            if (value === 'true' || value === 'false' || value === 'null') {
-                              throw new Error(`Invalid value for type "${type}": ${value} (expected string)`);
-                            }
-                          } else if (type === '<Number>') {
-                            if (isNaN(parseFloat(value)) || !isFinite(value)) {
-                              throw new Error(`Invalid value for type "${type}": ${value} (expected number)`);
-                            }
-                          } else if (type === '<Boolean>') {
-                            if (value !== 'true' && value !== 'false') {
-                              throw new Error(`Invalid value for type "${type}": ${value} (expected boolean)`);
-                            }
-                          } else if (type === '<Array>') {
-                            try {
-                              let parsedValue = JSON.parse(value);
-                              if (!Array.isArray(parsedValue)) {
-                                throw new Error(`Invalid value for type "${type}": ${value} (expected array)`);
-                              }
-                            } catch (error) {
-                              throw new Error(`Invalid value for type "${type}": ${value} (expected array)`);
-                            }
-                          } else {
-                            throw new Error(`Unsupported type: ${type}`);
-                          }
-                        }
-                      
-                        item.remove();
-                      });
-                      
-                 
-                                        
-                      
-                    setData(e);
-                  }
-                });
-              }
-            });
-          }
         }
-      });
-      
+         
 
-    let imports = html.querySelectorAll('import');
-
-    imports.forEach((item) => {
-
-        let file = item.getAttribute('src');
-
-        if (!file.endsWith('.html')) {
-            throw new Error('Unsupported imported file type!');
-        }
-
-        if (!window[file]) {
-
-            fetch(file)
-                .then((response) => {
-                    return response.text();
-                })
-                .then((data) => {
-
-
-                    window[file] = data
-                    setData(data, html, body, item)
-
-                });
-        } else {
-            setData(window[file], html, body, item)
-        }
+         
 
     });
+   
+  
+ 
+      
+
+  
     
       
       
      
+    html.querySelectorAll('img').forEach((item) => {
+           
+        item.setAttribute('loading', 'lazy');
+        let preload = document.createElement('link');
+        preload.setAttribute('rel', 'preload');
+        preload.setAttribute('href', item.getAttribute('src'));
+        
+        preload.setAttribute('as', 'image');
+        document.querySelector('head').appendChild(preload);
+        // load img chunk by chunk
+        let src = item.getAttribute('src');
+        let img = new Image();
+        img.src = src;
+        img.onload = () => {
+            item.src = src;
+       
+            return
+        }
+    });
+    html.querySelectorAll('a').forEach((item) => {
+        item.setAttribute('target', '_blank');
+        if (item.hasAttribute('href') && item.getAttribute('href').startsWith('/')){
+             item.setAttribute('href',  '#'+item.getAttribute('href'))
+        
+           
+        }
+
+    }) 
       
 
   
@@ -390,66 +407,20 @@ const parser = async (data) => {
     let _export = html.querySelector('export');
      
   
+    let el = html.querySelector('export')
     if (_export) {
         _export = _export.innerHTML.replace(/\s/g, '');
         _export = _export.split(',');
         _export = _export.filter(Boolean);
 
-
+        el.remove()
+        
 
 
         _export.forEach(async (item) => {
 
 
             let template = html.querySelector(item);
-
-
-
-
-            let attributes = [];
-
-
-
-            attributes.forEach((attribute) => {
-                if (template.hasAttribute(attribute)) {
-                    if (attribute === 'typeof') {
-
-                        let type = types.find((type) => type.name === template.getAttribute(attribute));
-
-                        if (type) {
-                            let constraintType = contraintTypes[type.constraint];
-                            let value = body.querySelector(item).innerHTML;
-                            let convertedValue;
-
-                            if (type.isStrict === 'false') {
-                                return;
-                            }
-
-                            if (constraintType === Number) {
-                                convertedValue = Number(value);
-                                convertedValue = isNaN(convertedValue) ? 0 : convertedValue;
-                                if (convertedValue === 0) {
-                                    throw new Error(`Invalid value for type "${type.name}": ${value} (expected number)`);
-                                }
-                            } else if (constraintType === Boolean) {
-                                if (value.toLowerCase() === 'true') {
-                                    convertedValue = true;
-                                } else if (value.toLowerCase() === 'false') {
-                                    convertedValue = false;
-                                } else {
-                                    throw new Error(`Invalid value for type "${type.name}": ${value} (expected boolean)`);
-                                }
-                            } else if (constraintType === String) {
-                                convertedValue = value;
-                            } else {
-                                throw new Error(`Invalid constraint type for type "${type.name}": ${type.constraint}`);
-                            }
-                        } else {
-                            throw new Error(`Type "${template.getAttribute(attribute)}" does not exist`);
-                        }
-                    }
-                }
-            });
 
  
 
@@ -627,7 +598,7 @@ const parser = async (data) => {
                                     })
                                     .then(async (data) => {
     
-                                        await setTimeout(() => {}, 0)
+                                       
                                         window[file] = data
                                         setData(data, html, document.body, item)
                                     })
@@ -714,16 +685,7 @@ const parser = async (data) => {
 
                     }
                 }
-
-                element.prepend = (code) => {
-                    element.innerHTML = code + element.innerHTML;
-                    return methods(element);
-                };
-                element.append = (code) => {
-
-                    element.innerHTML += code;
-                    return methods(element);
-                };
+ 
                 element.blur = () => {
                     element.blur();
                 };
@@ -769,16 +731,8 @@ const parser = async (data) => {
                     return methods(newElement);
                 };
                 element.on = (event, callback) => {
-                    element.addEventListener(event, (e) => {
-                        Object.defineProperty(e, 'target', {
-                            value: methods(e.target),
-                        });
-                        Object.defineProperty(e, 'currentTarget', {
-                            value: methods(e.currentTarget),
-                        });
-                        callback(e);
-                        return methods(element);
-                    });
+                    element.addEventListener(event, callback);
+                    return methods(element);
                 };
                 element.setProp = (prop, value) => {
                     
@@ -915,10 +869,11 @@ const parser = async (data) => {
                 add: (element, attributes) => {
                     let el = document.createElement(element);
 
-
-                    Object.keys(attributes).forEach((item) => {
-                        el.setAttribute(item, attributes[item]);
-                    });
+                    if (attributes) {
+                        Object.keys(attributes).forEach((key) => {
+                            el.setAttribute(key, attributes[key]);
+                        });
+                    }
                     el = methods(el);
 
                     return methods(el);
@@ -1185,7 +1140,7 @@ class Router {
 
         // Attach event listeners to handle hash changes and DOMContentLoaded
         window.addEventListener('hashchange', () => {
-            this.route();
+             this.route();
              rerender()
         });
         window.addEventListener('DOMContentLoaded', () => {
@@ -1197,6 +1152,8 @@ class Router {
     }
 
     route() {
+        window.render = performance.now()
+        
         const hash = window.location.hash.slice(1); // Remove the "#" character
         this.currentRoute = hash;
         this.navigate();
@@ -1208,24 +1165,27 @@ class Router {
             let parent = item.parent;
             let template = item.template;
             let element = item.element;
-            
+            element.innerHTML = '';
             if (parent.getAttribute('route') ===  route) {
-                element.innerHTML = '';
-                window.dox = dox;
+                let rendered = window.render - performance.now()
+                rendered = Math.abs(rendered).toFixed(2)
+                
+               
                 document.title = parent.getAttribute('title');
               
                 window.rerender(element.tagName)
                  
-                window.currentRender = element;
-                let dom = new DOMParser().parseFromString(template, 'text/html');
+               
+               
+                let dom  = new DOMParser().parseFromString(template, 'text/html');
+                 
                 dom.body.innerHTML = dom.body.innerHTML.replace(/{{(.*?)}}}/gs, '');
-               
-               
+                let comment = document.createComment(`${element.tagName} Rendered in ${rendered}ms`);
+                dom.body.prepend(comment)
                 element.innerHTML =  dom.body.innerHTML;
+                window.dox = dox;
                
-            } else {
-                element.innerHTML = '';
-            }
+            }  
         });
 
     }
@@ -1245,7 +1205,7 @@ class Router {
                 route = window.location.hash.split('?')[0].replace('#', '');
                 const routeHandler = this.routes[route];
                 this.render(route);
-                await setTimeout(() => {}, 2); // Wait for the DOM to be ready
+               
                 routeHandler({ params, query });
                 window.dox = window.dox || {};
                 return;
@@ -1255,7 +1215,7 @@ class Router {
                 // Render the corresponding route
                 this.render(routeWithoutParams);
       
-                await setTimeout(() => {}, 2); // Wait for the DOM to be ready
+                
                 routeHandler({ params, query });
       
                 window.dox = window.dox || {};
@@ -1267,7 +1227,7 @@ class Router {
                 const routeWithoutAsterisk =  route.split('/*')[0];
                 this.render(routeWithoutAsterisk);
       
-                await setTimeout(() => {}, 2); // Wait for the DOM to be ready
+               
       
                 // Pass the asterisk value as a parameter to the route handler
                 routeHandler({ asterisk });
@@ -1279,7 +1239,7 @@ class Router {
                 const routeHandler = this.routes[route];
                 this.render(route);
       
-                await setTimeout(() => {}, 2); // Wait for the DOM to be ready
+               
                 routeHandler({ params, query });
                 window.dox = window.dox || {};
                 return;
@@ -1332,12 +1292,7 @@ class Router {
       }
       
       
-
-    // Rest of the code remains the same
-
-
  
-
 
     get(route, handler) {
         this.routes[route] = handler;
@@ -1402,298 +1357,221 @@ class Router {
 
  
 async function setData(data, html, body, item) {
-   
- 
- 
-      let dom = new DOMParser();
-     let dhtml = await dom.parseFromString(data, 'text/html').body
- 
-      
-      
-     
-      
 
+
+
+    let dom = new DOMParser();
+    let dhtml = dom.parseFromString(data, 'text/html').body
 
     let props = {};
 
-    dhtml.querySelectorAll('var').forEach((item) => {
-         
+    dhtml.querySelectorAll('*').forEach((item) => {
+
         item.style.display = 'none';
         let varName = item.getAttribute('name');
-        
+
         let varValue = item.innerHTML;
         window[varName] = varValue;
         dhtml.innerHTML = dhtml.innerHTML.replace(`{{${varName}}}`, varValue);
-        
+
         item.remove();
-        return;
-    });
-    
-    if (dhtml.querySelector('if')) {
-        let el = dhtml.querySelector('if')
 
-        let prop = el.getAttribute('prop') ? el.getAttribute('prop') : null
-        let is = el.getAttribute('is')
-        let elseis = el.getAttribute('else')
-        let elparent = el.parentNode
-        let parentprops = el.getAttribute('props') ? el.getAttribute('props').split(',') : null
+        if (item.tagName === 'var') {
+            item.style.display = 'none';
+            let varName = item.getAttribute('name');
+            let varValue = item.innerHTML;
+            window[varName] = varValue;
 
-        let rendered = html.querySelector(elparent.tagName)
-        if (prop && parentprops) {
-            parentprops.forEach((item) => {
-
-                let propvalue = rendered.getAttribute(prop)
-                if (propvalue == is) {
-                    let template = el.innerHTML
-                    if (template.includes('{{')) {
-                        let value = template.split('{{')[1].split('}}')[0]
-                        parsedjs(value, elparent)
-                    }
+            dhtml.querySelectorAll('*').forEach((element) => {
+                let matches = element.innerHTML.match(/{{(.*?)}}/g);
+                if (matches && element.innerHTML.includes(`{{${varName}}}`)) {
+                    matches.forEach((match) => {
+                        element.innerHTML = element.innerHTML.replace(match, varValue);
+                    });
                 }
-
-            })
-        }
-
-    }
-    dhtml.querySelectorAll('var').forEach((item) => {
-        item.style.display = 'none';
-        let varName = item.getAttribute('name');
-        let varValue = item.innerHTML;
-        window[varName] = varValue;
-      
-        html.querySelectorAll('*').forEach((element) => {
-          let matches = element.innerHTML.match(/{{(.*?)}}/g);
-          if (matches && element.innerHTML.includes(`{{${varName}}}`)) {
-            matches.forEach((match) => {
-              element.innerHTML = element.innerHTML.replace(match, varValue);
             });
-          }
-        });
-      
-        if (item.hasAttribute('typeof')) {
-          let type = item.getAttribute('typeof').split('{{:')[1].split('}}')[0];
-          let value = varValue;
-      
-          if (type === '<Json>') {
-            try {
-              let parsedValue = JSON.parse(value);
-              
-            } catch (error) {
-              throw new Error(`Invalid value for type "${type}": ${value} (expected JSON)`);
-            }
-          } else if (type === '<String>') {
-            if (value === 'true' || value === 'false' || value === 'null') {
-              throw new Error(`Invalid value for type "${type}": ${value} (expected string)`);
-            }
-          } else if (type === '<Number>') {
-            if (isNaN(parseFloat(value)) || !isFinite(value)) {
-              throw new Error(`Invalid value for type "${type}": ${value} (expected number)`);
-            }
-          } else if (type === '<Boolean>') {
-            if (value !== 'true' && value !== 'false') {
-              throw new Error(`Invalid value for type "${type}": ${value} (expected boolean)`);
-            }
-          } else if (type === '<Array>') {
-            try {
-              let parsedValue = JSON.parse(value);
-              if (!Array.isArray(parsedValue)) {
-                throw new Error(`Invalid value for type "${type}": ${value} (expected array)`);
-              }
-            } catch (error) {
-              throw new Error(`Invalid value for type "${type}": ${value} (expected array)`);
-            }
-          } else {
-            throw new Error(`Unsupported type: ${type}`);
-          }
-        }
-      
-        item.remove();
-      });
-      
-      
- 
-    
+            if (item.hasAttribute('typeof')) {
+                let type = item.getAttribute('typeof').split('{{:')[1].split('}}')[0];
+                let value = varValue;
 
-  
-    
-    let proptemplates =[]
-    
-    dhtml.querySelectorAll('[props]').forEach(async (item) => {
-         
-        let name = item.tagName;
-        if (html.querySelector(name)) {
-            let $props = item.getAttribute('props').split(':');
-            $props.forEach(async (prop) => {
-                props[name] = $props;
-                sessionStorage.setItem('$dox-props', JSON.stringify(props))
-                 
-                if (prop == 'children') {
-                    
-                    if (html.querySelector(name).querySelector('slot')) {
-                        if (dhtml.querySelector(name).innerHTML.includes('{{children}}')) {
-                            if(proptemplates.length > 0){
+                if (type === '<Json>') {
+                    try {
+                        let parsedValue = JSON.parse(value);
+
+                    } catch (error) {
+                        throw new Error(`Invalid value for type "${type}": ${value} (expected JSON)`);
+                    }
+                } else if (type === '<String>') {
+                    if (value === 'true' || value === 'false' || value === 'null') {
+                        throw new Error(`Invalid value for type "${type}": ${value} (expected string)`);
+                    }
+                } else if (type === '<Number>') {
+                    if (isNaN(parseFloat(value)) || !isFinite(value)) {
+                        throw new Error(`Invalid value for type "${type}": ${value} (expected number)`);
+                    }
+                } else if (type === '<Boolean>') {
+                    if (value !== 'true' && value !== 'false') {
+                        throw new Error(`Invalid value for type "${type}": ${value} (expected boolean)`);
+                    }
+                } else if (type === '<Array>') {
+                    try {
+                        let parsedValue = JSON.parse(value);
+                        if (!Array.isArray(parsedValue)) {
+                            throw new Error(`Invalid value for type "${type}": ${value} (expected array)`);
+                        }
+                    } catch (error) {
+                        throw new Error(`Invalid value for type "${type}": ${value} (expected array)`);
+                    }
+                } else {
+                    throw new Error(`Unsupported type: ${type}`);
+                }
+            }
+
+        }
+        else if (item.hasAttribute('props')) {
+            let name = item.tagName;
+            if (html.querySelector(name)) {
+                let $props = item.getAttribute('props').split(':');
+                $props.forEach(async (prop) => {
+                    props[name] = $props;
+                    sessionStorage.setItem('$dox-props', JSON.stringify(props))
+
+                    if (prop == 'children') {
+
+                        if (html.querySelector(name).querySelector('slot')) {
+                            if (dhtml.querySelector(name).innerHTML.includes('{{children}}')) {
+                                if (proptemplates.length > 0) {
+                                    proptemplates.forEach((item) => {
+                                        if (item.parent == dhtml.querySelector(name).parentNode) {
+                                            dhtml.querySelector(name).innerHTML = item.template
+                                        }
+                                    })
+
+                                }
+                                proptemplates.push({
+                                    element: dhtml.querySelector(name),
+                                    template: dhtml.querySelector(name).innerHTML,
+                                    parent: dhtml.querySelector(name).parentNode ? dhtml.querySelector(name).parentNode : null,
+                                })
+
+
+                                dhtml.querySelector(name).innerHTML = dhtml.querySelector(name).innerHTML.replace(`{{children}}`, html.querySelector(name).querySelector('slot').innerHTML);
+
+
+
+                            }
+                        }
+                    } else {
+                        if (html.querySelector(name).getAttribute(prop)) {
+
+                            if (proptemplates.length > 0) {
                                 proptemplates.forEach((item) => {
-                                   if(item.parent == dhtml.querySelector(name).parentNode){
-                                    dhtml.querySelector(name).innerHTML = item.template
-                                   }
+
+                                    if (dhtml.querySelector(name).innerHTML.includes(`{{${prop}}}`)) {
+                                        dhtml.querySelector(name).innerHTML = dhtml.querySelector(name).innerHTML.replace(`{{${prop}}}`, html.querySelector(name).getAttribute(prop));
+
+                                    }
                                 })
 
                             }
-                            proptemplates.push({
-                                element: dhtml.querySelector(name),
-                                template: dhtml.querySelector(name).innerHTML,
-                                parent: dhtml.querySelector(name).parentNode ? dhtml.querySelector(name).parentNode : null,
-                            })
-                            
-                            
-                            dhtml.querySelector(name).innerHTML = dhtml.querySelector(name).innerHTML.replace(`{{children}}`, html.querySelector(name).querySelector('slot').innerHTML);
-                            
-                           
-                          
-                        }
-                    }
-                }else{
-                    if (html.querySelector(name).getAttribute(prop)) {
-                       
-                        if(proptemplates.length > 0){
-                            proptemplates.forEach((item) => {
+                            if (dhtml.querySelector(name).innerHTML.includes(`{{${prop}}}`)) {
+                                proptemplates.push({
+                                    element: dhtml.querySelector(name),
+                                    template: dhtml.querySelector(name).innerHTML,
+                                    parent: dhtml.querySelector(name).parentNode ? dhtml.querySelector(name).parentNode : null,
+                                })
 
-                               if(dhtml.querySelector(name).innerHTML.includes(`{{${prop}}}`)){
-                                 dhtml.querySelector(name).innerHTML = dhtml.querySelector(name).innerHTML.replace(`{{${prop}}}`, html.querySelector(name).getAttribute(prop));
-                              
-                               }
-                            })
-
-                        }
-                        if (dhtml.querySelector(name).innerHTML.includes(`{{${prop}}}`)) {
-                            proptemplates.push({
-                                element: dhtml.querySelector(name),
-                                template: dhtml.querySelector(name).innerHTML,
-                                parent: dhtml.querySelector(name).parentNode ? dhtml.querySelector(name).parentNode : null,
-                            })
-                            
-                            let value = html.querySelector(name).getAttribute(prop);
-                            dhtml.querySelector(name).innerHTML = dhtml.querySelector(name).innerHTML.replace(`{{${prop}}}`, value);
-                        }
-                    }
-                }
-            });
-        }
-    });
-    dhtml.querySelectorAll('*').forEach((element) => {
-
-
-
-
-        let attributes = Object.values(element.attributes);
-
-
-        attributes.forEach((attr) => {
-
-            let attrValue = attr.value;
-
-            if (attrValue.includes('{{')) {
-                let matches = attrValue.match(/{{(.*?)}}/g);
-
-                if (matches) {
-                    matches.forEach((match) => {
-                        let value = match.replace('{{', '').replace('}}', '');
-                        let prop = element.parentNode.getAttribute(value);
-                        let parent = document.querySelector(element.parentNode.tagName);
-                        if (parent && parent.getAttribute(value)) {
-                            prop = parent.getAttribute(value);
-                        }
-                        attrValue = attrValue.replace(new RegExp(`{{${value}}}`, 'g'), prop);
-                    });
-                    element.setAttribute(attr.name, attrValue);
-                }
-            }
-        });
-        let matches = element.innerHTML.match(/{{(.*?)}}/g);
-
-        if (matches) {
-            matches.forEach((match) => {
-
-                let value = match.split('{{')[1].split('}}')[0];
-                let el = dhtml.querySelector(element.tagName);
-                let parent = el.parentNode.tagName;
-                html.querySelectorAll('*').forEach((item) => {
-                    if (item.tagName == parent) {
-                        let prop = item.getAttribute(value);
-                        if (prop) {
-                            if (prop.toString().toLowerCase() == 'true') {
-                                prop = prop.toString().toLowerCase();
+                                let value = html.querySelector(name).getAttribute(prop);
+                                dhtml.querySelector(name).innerHTML = dhtml.querySelector(name).innerHTML.replace(`{{${prop}}}`, value);
                             }
-                            let attrValue = element.innerHTML.replace(new RegExp(`{{${value}}}`, 'g'), prop);
-                            element.innerHTML = attrValue;
                         }
                     }
                 });
-            });
-        }
-        if (element.hasAttribute('state')) {
-            let state = element.getAttribute('state')
-
-
-            element.innerHTML = element.innerHTML + getState(state)
-            if (document.querySelector(element.tagName)) {
-                document.querySelector(element.tagName).innerHTML = element.innerHTML
             }
-            effect((state), (state) => {
-                if (document.querySelector(element.tagName)) {
-                    document.querySelector(element.tagName).innerHTML = state
+            let attributes = Object.values(item.attributes);
+
+
+            attributes.forEach((attr) => {
+
+                let attrValue = attr.value;
+
+                if (attrValue.includes('{{')) {
+                    let matches = attrValue.match(/{{(.*?)}}/g);
+
+                    if (matches) {
+                        matches.forEach((match) => {
+                            let value = match.replace('{{', '').replace('}}', '');
+                            let prop = element.parentNode.getAttribute(value);
+                            let parent = document.querySelector(element.parentNode.tagName);
+                            if (parent && parent.getAttribute(value)) {
+                                prop = parent.getAttribute(value);
+                            }
+                            attrValue = attrValue.replace(new RegExp(`{{${value}}}`, 'g'), prop);
+                        });
+                        element.setAttribute(attr.name, attrValue);
+                    }
                 }
-            })
+            });
+            let matches = item.innerHTML.match(/{{(.*?)}}/g);
+
+            if (matches) {
+                matches.forEach((match) => {
+
+                    let value = match.split('{{')[1].split('}}')[0];
+                    let el = dhtml.querySelector(item.tagName);
+                    let parent = el.parentNode.tagName;
+                    html.querySelectorAll('*').forEach((item) => {
+                        if (item.tagName == parent) {
+                            let prop = item.getAttribute(value);
+                            if (prop) {
+                                if (prop.toString().toLowerCase() == 'true') {
+                                    prop = prop.toString().toLowerCase();
+                                }
+                                let attrValue = element.innerHTML.replace(new RegExp(`{{${value}}}`, 'g'), prop);
+                                element.innerHTML = attrValue;
+                            }
+                        }
+                    });
+                });
+            }
+            if (item.hasAttribute('state')) {
+                let state = element.getAttribute('state')
+
+
+                element.innerHTML = element.innerHTML + getState(state)
+                if (document.querySelector(element.tagName)) {
+                    document.querySelector(element.tagName).innerHTML = element.innerHTML
+                }
+                effect((state), (state) => {
+                    if (document.querySelector(element.tagName)) {
+                        document.querySelector(element.tagName).innerHTML = state
+                    }
+                })
+            }
         }
-        
     });
 
 
-    if(item.getAttribute('exports')){
-       
+    if (item.getAttribute('exports')) {
+        console.log(item.getAttribute('exports'))
+
         let exported = item.getAttribute('exports').split(',');
         exported.forEach(async (exportItem) => {
-       
-            let el = dhtml.querySelector(exportItem) ? dhtml.querySelector(exportItem) :  html.querySelector(exportItem)
-        
-                
-            function waitForElm(selector) {
-                return new Promise(resolve => {
-                    if (document.querySelector(selector)) {
-                        return resolve(document.querySelector(selector));
-                    }
-            
-                    const observer = new MutationObserver(mutations => {
-                        if (document.querySelector(selector)) {
-                            resolve(document.querySelector(selector));
-                            observer.disconnect();
-                        }
-                    });
-            
-                    observer.observe(document.body, {
-                        childList: true,
-                        subtree: true
-                    });
-                });
-            }
-            let elm = await waitForElm(exportItem)
-            
-                 
-           elm.innerHTML = el.innerHTML
-            
-       
-        
 
-    });
+            let el = dhtml.querySelector(exportItem) ? dhtml.querySelector(exportItem) : html.querySelector(exportItem)
+         
+            document.querySelector(exportItem).innerHTML = el.innerHTML
+
+        });
     }
 
 
 
-     
-        
- 
-  
-   
+
+
+
+
+
 
 
 }
