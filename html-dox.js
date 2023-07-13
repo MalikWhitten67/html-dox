@@ -1,1620 +1,1080 @@
-let dox;
-let currentRender;
+let imports = document.querySelector('meta[imports]').getAttribute('imports');
+let hooked = false;
+imports = imports.split(',');
 let templates = [];
-let importsTag = document.querySelector('imports')   
-let importmeta = document.querySelector('[imports]')
-// remove whitespace
-let imports;
-if(importmeta){
-  imports = importmeta.getAttribute('imports').replace(/\s/g, '')
-}else if(importsTag){
-    throw new Error('<imports> is deprecated use <meta imports="/someimport,/someimport"> instead! read latest git release for more info: https://github.com/MalikWhitten67/html-dox/releases/latest')
-}
- 
-imports = imports.split(',')
-// remove empty strings
-imports = imports.filter(Boolean)
+let parser = new DOMParser();
+window.variables = {};
+window.state = {};
+window.props = {};
 
-let cache = {}
- 
-let types = []
-// constraint types - for type checking
-
-let contraintTypes = {
-    'dox:string': String,
-    'dox:number': Number,
-    'dox:boolean': Boolean,
-    'dox:array': Array,
-    'dox:object': Object,
-    'dox:undefined': undefined,
-    'dox:null': null,
-    'dox:function': Function,
-    'dox:regexp': RegExp,
-    'dox:date': Date,
-}
-// import checking // import file if type is valid
-let variables = []
-let props = sessionStorage.getItem('$dox-props') ? JSON.parse(sessionStorage.getItem('$dox-props')) : {}
-
-
-
-
- 
-
-imports.map((item) => {
-    if (!item.endsWith('.html') && !item.endsWith('.css') && !item.endsWith('.js')) {
-        throw new Error('Unsupported imported file type!');
-    }
-    else if (item.endsWith('.js')) {
-        let preload = document.createElement('link');
-        preload.setAttribute('rel', 'preload');
-        preload.setAttribute('href', item);
-        preload.type = 'text/javascript';
-        preload.setAttribute('as', 'script');
-        document.querySelector('head').appendChild(preload);
-
-        if (!cache[item]) {
-            fetch(item)
-                .then((response) => {
-                    return response.text();
-                })
-                .then((data) => {
-
-                    if (data.includes('document') && !item.includes('tailwind.js')) {
-                        throw new Error('Imported JS file cannot contain document. Use dox instead.');
-                    } else if ((data.includes('innerHTML') || data.includes('innerText')) && !item.endsWith('tailwind.js')) {
-                        throw new Error('Use dox:text to return text and dox:$ to return HTML.');
-                    }
-                    let pscript = document.createElement('script')
-
-                            pscript.id = 'dox-script'
-
-                            pscript.type = 'module'
-                            pscript.innerHTML = data
-                            document.head.appendChild(pscript)
- 
-                             
-
-                  
-
-
-
-                });
-        } else {
-            (() => {
-                cache[item]
-            })()
-
-        }
-    }
-    if (item.endsWith('.html')) {
-        let preload = document.createElement('link');
-        preload.setAttribute('rel', 'preload');
-        preload.setAttribute('href', item);
-       
-        preload.setAttribute('as', 'document');
-        document.querySelector('head').appendChild(preload);
-
-        if (cache[item]) {
-            parser(cache[item]);
-        } else {
-            fetch(item)
-                .then((response) => {
-                    return response.text();
-                })
-                .then(async (data) => {
-                    cache[item] = data;
-                     parser(data);
-                });
-        }
-    }
+// Create an array of fetch promises
+let fetchPromises = imports.map(function(imported) {
+  let name = imported.split('/').pop().split('.')[0].toLowerCase();
+  return fetch(imported)
+    .then(function(response) {
+      return response.text();
+    })
+    .then(function(data) {
+      return {
+        name: name,
+        data: data,
+      };
+    });
 });
 
-const parser = async (data) => {
-    let dom = new DOMParser();
-    let html = dom.parseFromString(data, 'text/html');
-    html = html.body
-    let body = document.body
-    
-    
-
-     
-    html.querySelectorAll('*').forEach((item) => {
-         
-        if (item.innerHTML.includes('{{')) {
-            let matchesWithNewlines = item.innerHTML.match(/{{(.*?)}}/gs);
-            if (matchesWithNewlines) {
-              matchesWithNewlines.forEach(async (match) => {
-                  let data = match.split('{{')[1].split('}}}')[0].trim();
-                  if (data.startsWith('map(') && data.endsWith('}}')) {
-                    match = match.replace('&gt;', '>');
-                     
-                    let json = data.split('map(')[1].split(')')[0];
-                
-                    let returnMethod = match.split('return(')[1].split('){')[0].trim();
-                    let returnHTML = match.split('){')[1].trim().split('}}')[0].trim();
-                    returnHTML = returnHTML.replace(/json\./g, '');
-                
-                    let parentElement = document.createElement('div');
-                
-                    async function setData(e) {
-                      let name;
-                      let value;
-                      if (e) {
-                        parentElement.innerHTML = '';
-                        name = e.data.data.name;
-                        value = e.data.data.value;
-                     
-                        parsed =  JSON.parse(JSON.stringify(value))
-                
-                        let func;
-                        let modifiedData;
-                        if (returnMethod.length > 0) {
-                          func = new Function('json', `return ${json}.${returnMethod}`);
-                          modifiedData = func(parsed);
-                        } else {
-                          modifiedData = parsed;
-                        }
-                
-                        modifiedData.forEach((item) => {
-                          console.log(item)
-                          let divElement;
-                          let embeddedHTML = returnHTML;
-                          let dom = new DOMParser();
-                          let html = dom.parseFromString(embeddedHTML, 'text/html');
-                   
-                           
-                          let match =  html.body.outerHTML.match(/{(.*?)}/gs);
-                          match.forEach((it) => {
-                              
-                              let vv = it.split(`{${json}.`)[1].split('}')[0]
-                           
-                              html.body.innerHTML = html.body.innerHTML.replace(`{${json}.${vv}}`,   item[vv])
-                              embeddedHTML = html.body.innerHTML
-                            });
-                            
-  
-                        
-                          divElement = embeddedHTML;
-                          parentElement.innerHTML = parentElement.innerHTML + divElement;
-                        });
-                        
-                        
-                        function waitForElm(selector) {
-                            return new Promise((resolve) => {
-                                if (document.querySelector(selector)) {
-                                return resolve(document.querySelector(selector));
-                                }
-                    
-                                const observer = new MutationObserver((mutations) => {
-                                if (document.querySelector(selector)) {
-                                    resolve(document.querySelector(selector));
-                                    observer.disconnect();
-                                }
-                                });
-                    
-                                observer.observe(document.body, {
-                                childList: true,
-                                subtree: true,
-                                });
-                            });
-                        }
-                         
-                        await waitForElm(`[map="${json}"]`);
-                        let elm =  document.querySelector(`[map="${json}"]`);
-                
-                        
-                        
-                        if (elm) {
-                          if (elm.innerHTML.length == 0) {
-                            elm.innerHTML = parentElement.innerHTML;
-                          } else if (elm.innerHTML.length > 0) {
-                            if (!elm.querySelector(`[container-map="${json}"]`)) {
-                              let container = document.createElement('div');
-                              container.innerHTML = parentElement.innerHTML;
-                              container.setAttribute('container-map', json);
-                             
-                            } else {
-                              console.log(elm.querySelector(`[container-map="${json}"]`))
-                              elm.querySelector(`[container-map="${json}"]`).innerHTML = parentElement.innerHTML;
-                              
-                            }
-                          }
-                        }
-                        
-                       
-                         
-                         
-                      } else if (window[json]) {
-                        parentElement.innerHTML = '';
-                
-                        let parsed = JSON.parse(window[json]);
-                        console.log(parsed);
-                
-                        let elements = [];
-                        let func;
-                        let modifiedData;
-                        if (returnMethod.length > 0) {
-                          func = new Function('json', `return ${json}.${returnMethod}`);
-                          modifiedData = func(parsed);
-                        } else {
-                          modifiedData = parsed;
-                        }
-                
-                        modifiedData.forEach((item) => {
-                          let divElement;
-                          let embeddedHTML = returnHTML;
-                
-                          Object.entries(item).forEach(([key, value]) => {
-                            embeddedHTML = embeddedHTML.replace(new RegExp(`{${key}}`, 'g'), value);
-                          });
-                
-                          divElement = embeddedHTML;
-                          parentElement.innerHTML = parentElement.innerHTML + divElement;
-                        });
-                
-                        function waitForElm(selector) {
-                          return new Promise((resolve) => {
-                            if (document.querySelector(selector)) {
-                              return resolve(document.querySelector(selector));
-                            }
-                
-                            const observer = new MutationObserver((mutations) => {
-                              if (document.querySelector(selector)) {
-                                resolve(document.querySelector(selector));
-                                observer.disconnect();
-                              }
-                            });
-                
-                            observer.observe(document.body, {
-                              childList: true,
-                              subtree: true,
-                            });
-                          });
-                        }
-                
-                      
-                        let elm =  document.querySelector(`[map="${json}"]`);
-                     
-                
-                        
-                        if (elm) {
-                          if (elm.innerHTML.length == 0) {
-                            elm.innerHTML = parentElement.innerHTML;
-                          } else if (elm.innerHTML.length > 0) {
-                            if (!elm.querySelector(`[container-map="${json}"]`)) {
-                              let container = document.createElement('div');
-                              container.innerHTML = parentElement.innerHTML;
-                              container.setAttribute('container-map', json);
-                              elm.appendChild(container);
-                            } else {
-                              elm.querySelector(`[container-map="${json}"]`).innerHTML = parentElement.innerHTML;
-                            }
-                          }
-                        }
-                        document.querySelector(`[map="${json}"]`).style.display = 'block'
-                          
-                      }
-                       
-                    }
-                
-                    setData();
-                
-                    window.addEventListener('message', (e) => {
-                      if (e.origin == window.location.origin && e.data.type == 'setVar') {
-                        
-                        html.querySelectorAll('[var]').forEach((item) => {
-                          let varName = item.getAttribute('var');
-                          let varValue = item.innerHTML;
-                          window[varName] = varValue;
-                          item.remove();
-                        });
-                                
-                        setData(e);
-                      }
-                    });
-                  }
-                  
-                });
-            }
-          }
-        if(item.tagName == 'import') {
-            let file = item.getAttribute('src');
-            if (!file.endsWith('.html')) {
-                throw new Error('Unsupported imported file type!');
-            }
-    
-            if (!window[file]) {
-    
-                fetch(file)
-                    .then((response) => {
-                        return response.text();
-                    })
-                    .then((data) => {
-    
-    
-                        window[file] = data
-                        setData(data, html, body, item)
-    
-                    });
-            } else {
-                setData(window[file], html, body, item)
-            }
-        }
-        if(item.tagName == 'var'){
-   
-            let varName = item.getAttribute('name');
-            let varValue = item.innerHTML;
-            if(item.innerHTML.length  > 0){
-                window[varName] = varValue;
-              
-            }else{
-                window[varName] = ''
-            }
-
-                 
-        html.innerHTML = html.innerHTML.replace(`{{${varName}}}`, varValue);
-        item.remove();
-        return;
-        }
-         
-
-         
-
-    });
-   
-  
  
-      
+function handleVariables(html) {
+    Object.keys(window.variables).forEach(function(variable) {
+         if(Array.isArray(window.variables[variable])){
+             let value = window.variables[variable];
+             value.forEach(function(v){
+                Object.keys(v).forEach(function(vname){
+                    let vvalue = v[vname];
+                    let regex = new RegExp('{{' + variable + '.' + vname  +'}}', 'g');
+                    html.body.innerHTML = html.body.innerHTML.replaceAll(regex, vvalue);
+                     
+                });
+             });
+             return html;
+            
+        }
+        let regex = new RegExp('{{' + variable + '}}', 'g');
+        html.body.innerHTML = html.body.innerHTML.replaceAll(regex, window.variables[variable]);
+    });
+    return html;
 
-  
-    
-      
-      
-     
-    html.querySelectorAll('img').forEach((item) => {
-           
-        item.setAttribute('loading', 'lazy');
-        let preload = document.createElement('link');
-        preload.setAttribute('rel', 'preload');
-        preload.setAttribute('href', item.getAttribute('src'));
-        
-        preload.setAttribute('as', 'image');
-        document.querySelector('head').appendChild(preload);
-        // load img chunk by chunk
-        let src = item.getAttribute('src');
-        let img = new Image();
-        img.src = src;
-        img.onload = () => {
-            item.src = src;
-       
+
+}
+function doxMethods(element) {
+    return {
+      html: function(content) {
+        if(content){
+            element.innerHTML = content;
             return
         }
-    });
-    html.querySelectorAll('a').forEach((item) => {
-        item.setAttribute('target', '_blank');
-        if (item.hasAttribute('href') && item.getAttribute('href').startsWith('/')){
-             item.setAttribute('href',  '#'+item.getAttribute('href'))
-        
-           
+   
+        return element.innerHTML;
+      },
+        add: function(tag, attributes) {
+            let el = document.createElement(tag);
+            Object.keys(attributes).forEach(function(attribute) {
+                el.setAttribute(attribute, attributes[attribute]);
+            });
+            element.appendChild(el);
+            return el;
         }
 
-    }) 
+    };
+  }
+  
+  function setVar(name, value) {
+    window.variables[name] = value;
+  }
+  function getState(name) {
+    return window.state[name];
+  }
+  function setState(name, value) {
+     window.postMessage({
+        type: 'state',
+        name: name,
+        value: value
+    }, '*');
+    window.state[name] = value;
+
+  }
+  function effect(name, callback) {
+    window.addEventListener('message', function(event) {
+        if(event.data.type == 'state'){
+            if(event.data.name == name){
+                callback(event.data.value)
+            }
+        }
+    });
+  }
+  function setDox(html) {
+    let dox = {
+      querySelector: function(selector) {
+        let el = html.body.querySelector(selector) || document.querySelector(selector);
+        return doxMethods(el);
+      },
+      driver: function(name, options) {
+        dox[name] = options;
+      },
+      add: function(tag, attributes) {
+        let el = document.createElement(tag);
+        Object.keys(attributes).forEach(function(attribute) {
+          el.setAttribute(attribute, attributes[attribute]);
+        });
+        html.body.appendChild(el);
+        return doxMethods(el);
+      },
+     setVar: setVar,
+    };
+  
+    window.dox = dox;
+    window.setState = setState;
+    window.getState = getState;
+    window.effect = effect;
+  }
+  
+ 
+  setDox(document);
+  
+  function handleScripts(html) {
+    if(html){
+        var scripts =  html.body.querySelectorAll('script');
+        var variableRegex = /let\s+(\w+)\s*=\s*([\s\S]*?)(?:;|$)/g;
+        var importRegex = /import\s+{(.*?)}\s+from\s+['"](.*?)['"]/g;
+      
+        var beforeRenderScripts = [];
+        var afterRenderScripts = [];
+        for (var i = 0; i < scripts.length; i++) {
+          var script = scripts[i];
+      
+         
+          if (!script.hasAttribute('execute') && !script.hasAttribute('props')) {
+            var s = script.innerHTML;
+            var match;
+      
+            while ((match = variableRegex.exec(s)) !== null) {
+              var name = match[1].trim();
+              var value = match[2].trim().replace(/"/g, '');
       
 
-  
-
-    let _export = html.querySelector('export');
-     
-  
-    let el = html.querySelector('export')
-    if (_export) {
-        _export = _export.innerHTML.replace(/\s/g, '');
-        _export = _export.split(',');
-        _export = _export.filter(Boolean);
-
-        el.remove()
-        
-
-
-        _export.forEach(async (item) => {
-
-
-            let template = html.querySelector(item);
-
- 
-
-            html.querySelectorAll('[state]').forEach((element) => {
-                let state = element.getAttribute('state')
-
-                element.id = state
-                if (getState(state) == undefined || getState(state) == null) {
-                    setState(state, '')
-                }
-                element.innerHTML = element.innerHTML + getState(state)
-
-                setTimeout(() => {
-                    effect((state), (statev) => {
-
-                        setTimeout(() => {
-                            if (element.tagName == 'INPUT' || element.tagName == 'TEXTAREA') element.value = statev;
-                            if (element.tagName == 'SELECT') element.value = statev;
-                            if (element.tagName == 'IMG') element.src = statev;
-                            if (element.tagName == 'A') element.href = statev;
-                            if (element.tagName == 'IFRAME') element.src = statev;
-                            if (element.tagName == 'VIDEO') element.src = statev;
-                            if (element.tagName == 'AUDIO') element.src = statev;
-                            if (element.tagName == 'EMBED') element.src = statev;
-                            if (element.tagName == 'OBJECT') element.src = statev;
-                            if (element.tagName == 'SOURCE') element.src = statev;
-                            if (element.tagName == 'TRACK') element.src = statev;
-                            else element.innerHTML = statev;
-                            document.querySelector(`#${state}`).innerHTML = statev
-                        }, 0)
-                    })
-                }, 0)
-            })
-
-
-            window.rerender = rerender
-
-
-            if (html.querySelector(item).hasAttribute('props')) {
-                let el = html.querySelector(item)
-                 
-                let $props = html.querySelector(item).getAttribute('props').split(':');
-
-
-                $props.forEach((prop) => {
- 
- 
-                    
-                    props[item] = $props
-                    sessionStorage.setItem('$dox-props', JSON.stringify(props))
-
-                    let derivatives = template.querySelectorAll('[derive]');
-                    derivatives.forEach((subitem) => {
-                        let attr = subitem.getAttribute('derive');
-                        let derivedvalue = body.querySelector(item).getAttribute(attr);
-
-                        if (subitem.innerHTML.includes(`{{${attr}}}`)) {
-                            subitem.innerHTML = subitem.innerHTML.replace(`{{${attr}}}`, derivedvalue);
-                        }
-                    });
- 
-                    if (prop == 'children') {
-                        if (html.querySelector(item).querySelector('slot')) {
-                            if (html.querySelector(item).innerHTML.includes('{{children}}')) {
-                                let value = html.querySelector(item).querySelector('slot').innerHTML;
-                                html.querySelector(item).innerHTML = html.querySelector(item).innerHTML.replace('{{children}}', value);
-                            }
-                        }
-                    }
-                    else {
-                        
-                        if (body.querySelector(item).getAttribute(prop)) {
-                             
-                          html.querySelector(item).innerHTML = html.querySelector(item).innerHTML.replace(`{{${prop}}}`, body.querySelector(item).getAttribute(prop));
-                        }
-                    }
-
+              if (value.includes('{')) {
+                value = value.replace('{', '').replace('}', '').trim();
+                value = value.split(',').map(function(v) {
+                  var vname = v.split(':')[0].trim();
+                  var vvalue = v.split(':')[1].trim();
+                  var obj = {};
+                  obj[vname] = vvalue;
+                  return obj;
                 });
-
-                html.querySelectorAll('[props]').forEach((item) => {
-                    
-                     
-                  
-                    let props = item.getAttribute('props').split(':');
-                    props.forEach((prop) => {
-                        if (item.hasAttribute('typeof')) {
-                            let type = item.getAttribute('typeof').split('{{:')[1].split('}}')[0];
-                            let value = item.getAttribute(prop);
-                        
-                            if (type === '<Json>') {
-                              try {
-                                let parsedValue = JSON.parse(value);
-                               
-                              } catch (error) {
-                                throw new Error(`Invalid value for type "${type}": ${value} (expected JSON)`);
-                              }
-                            } else if (type === '<String>') {
-                              if (value === 'true' || value === 'false' || value === 'null') {
-                                throw new Error(`Invalid value for type "${type}": ${value} (expected string)`);
-                              }
-                            } else if (type === '<Number>') {
-                              if (isNaN(parseFloat(value)) || !isFinite(value)) {
-                                throw new Error(`Invalid value for type "${type}": ${value} (expected number)`);
-                              }
-                            } else if (type === '<Boolean>') {
-                              if (value !== 'true' && value !== 'false') {
-                                throw new Error(`Invalid value for type "${type}": ${value} (expected boolean)`);
-                              }
-                            } else if (type === '<Array>') {
-                              try {
-                                let parsedValue = JSON.parse(value);
-                                if (!Array.isArray(parsedValue)) {
-                                  throw new Error(`Invalid value for type "${type}": ${value} (expected array)`);
-                                }
-                              } catch (error) {
-                                throw new Error(`Invalid value for type "${type}": ${value} (expected array)`);
-                              }
-                            } else {
-                              throw new Error(`Unsupported type: ${type}`);
-                            }
-                          }
-                    })
-                   
-                  
-                   
-                  });
-                  
-                  
-                  
-            }
-
-         
-              if(document.querySelector(item)){
-                    
-
-      
-
-
-        templates.push({
-            element: document.querySelector(item),
-            parent: document.querySelector(item).parentNode,
-            template: template.innerHTML,
-            html:  html,
-            body: body
-        });
-    } 
-                
-                function rerender(ele) {
- 
-       
-                    let element = document.querySelector(ele)
-                     
-                    if (element) {
-    
-                        templates.forEach((item) => {
-                            if(item.element == element){
-                                let modules =  item.html.querySelectorAll('import')
-                                
-          
-                         
-    
-                        modules.forEach(async (item) => {
-                            let file = item.getAttribute('src');
-    
-                            if (!file.endsWith('.html')) {
-                                throw new Error('Unsupported imported file type!');
-                            }
-    
-                            if (!window[file]) {
-    
-    
-                                fetch(file)
-                                    .then((response) => {
-                                        return response.text();
-                                    })
-                                    .then(async (data) => {
-    
-                                       
-                                        window[file] = data
-                                        setData(data, html, document.body, item)
-                                    })
-                                return;
-    
-                            } else {
-    
-                                
-                                setData(window[file], html, document.body, item)
-                                
-                            }
-    
-                        });
-                            }
-                        })
-                 
-                        
-                    }
-                    
-    
-                }
-                rerender()
+              
+              }
             
-
-            function methods(element) {
-                    
+      
+              window.variables[name] = value;
+              html = handleVariables(html);
+               
+            }
+          } else if (script.getAttribute('execute') === 'beforeRender') {
+            var s = script.innerHTML;
            
+       
              
-                element.inject = (code) => {
-                    element.innerHTML = code;
-                    return methods(element);
-                };
+           
+            beforeRenderScripts.push(s);
+          }
+          else if (script.getAttribute('execute') === 'afterRender') {
+            var s = script.innerHTML;
+            afterRenderScripts.push(s);
+
+          }
+          else if (script.hasAttribute('props')) {
+            var s = script.innerHTML;
+            var match;
+      
+            while ((match = variableRegex.exec(s)) !== null) {
+              var name = match[1].trim();
+              var value = match[2].trim();
+      
+              if (value.includes('{')) {
+                value = value.replace('{', '').replace('}', '').trim();
+                value = value.split(',').map(function(v) {
+                  var vname = v.split(':')[0].trim();
+                  var vvalue = v.split(':')[1].trim();
+                  var obj = {};
+                  obj[vname] = vvalue;
+                  return obj;
+                });
+              }
+            }
+            window.props[name] = value;
+          }
+        }
+        
+      
+        return {
+          html: html,
+          beforeRenderScripts: beforeRenderScripts,
+          afterRenderScripts: afterRenderScripts,
+        };
+    }
+    
+  }
+  
+
+  function handleImports(htm) {
+    let imports = htm.querySelectorAll('import');
+    let fetchPromises = [];
+  
+    for (var i = 0; i < imports.length; i++) {
+      let src = imports[i].getAttribute('src');
+      let name = src.split('/').pop().split('.')[0].toLowerCase();
+  
+      let fetchPromise = fetch(src)
+        .then(function(response) {
+          return response.text();
+        })
+        .then(function(data) {
+          let d = parser.parseFromString(data, 'text/html');
+          return handleImports(d).then(function(updatedHtml) {
+            let { html, beforeRenderScripts, afterRenderScripts } = handleScripts(updatedHtml);
+  
+            // Execute the beforeRender scripts
+            beforeRenderScripts.forEach(function(script) {
+              if (script.includes('dox')) {
+                setDox(html);
+              }
+              eval(script);
+            });
+
+            
+            // remove ``` with <!-- -->
+            if (html.body.outerHTML.includes('`')) {
+                let code = html.body.outerHTML.split('```')[1];
+                html.body.outerHTML = html.body.outerHTML.replaceAll('```' + code + '```', '<!-- ' + code + ' -->');
+            }
+
+           
+
+            
+            Object.keys(window.props).forEach(function(prop) {
                 
-                let props = sessionStorage.getItem('$dox-props') ? JSON.parse(sessionStorage.getItem('$dox-props')) : [];
-                props = props[element.tagName];
-                if (props) {
-                    element.props = props;
-                }
-                element.class = (name) => {
-                    element.className = name;
-                    return methods(element);
-                };
-                element.add = (elementName, options) => {
-                    let newElement = document.createElement(elementName);
-                    if (options) {
-                        Object.keys(options).forEach((key) => {
-                            newElement.setAttribute(key, options[key]);
-                        });
-                    }
-                    element.appendChild(newElement);
-
-                    return methods(newElement);
-                }
-                element.delete = () => {
-                    element.remove()
-                    return methods(element)
-                }
-
-                element.parent = () => {
-
-                    return methods(element.parentNode);
-                };
-                element.query = (target) => {
-
-                    let el = document.querySelector(target);
-
-                    if (el) {
-                        return methods(el);
-                    }
-
-                }
-                element.classes = (name, option) => {
-                    if (option == 'add') element.classList.add(name);
-                    if (option == 'remove') element.classList.remove(name);
-                    if (option == 'toggle') element.classList.toggle(name);
-                    return methods(element);
-                };
-                element.html = (code) => {
-                    if (code) {
-                        element.innerHTML = code;
-                        return methods(element);
-                    } else {
-                        return element.innerHTML
-
-                    }
-                }
- 
-                element.blur = () => {
-                    element.blur();
-                };
-                element.fade = (time) => {
-                    element.style.transition = `opacity ${time}s`;
-                    element.style.opacity = 0;
-                }
-                element.focus = element.focus;
-                element.queryAll = (target) => {
-                    let targets = element.querySelectorAll(target);
-                    element.forEach = (callback) => {
-                        targets.forEach((item) => {
-                            callback(item);
-                        });
-                    };
-                    targets.forEach((item) => {
-                        let el = methods(item);
-                        item = el;
-                    });
-                    return targets;
-                };
-
-                element.after = (code) => {
-                    element.insertAdjacentHTML('afterend', code);
-                    return methods(element);
-                };
-                element.before = (code) => {
-                    element.insertAdjacentHTML('beforebegin', code);
-                    return methods(element);
-                };
-                element.attr = (name, value) => {
-                    if (value) {
-                        element.setAttribute(name, value);
-                        return methods(element);
-                    } else {
-                        return element.getAttribute(name);
-                    }
-                };
-                element.replace = (elementName, code) => {
-                    let newElement = document.createElement(elementName);
-                    newElement.innerHTML = code;
-                    element.parentNode.replaceChild(newElement, element);
-                    return methods(newElement);
-                };
-                element.on = (event, callback) => {
-                    element.addEventListener(event, callback);
-                    return methods(element);
-                };
-                element.setProp = (prop, value) => {
-                    
-                    if(value){
-                        html.querySelector(element.tagName).setAttribute(prop, value)
-                        rerender()
-                        return methods(element)
-                    }
-                }
-                element.css = (prop, value) => {
-                    if (value) {
-                        element.style[prop] = value;
-                        return methods(element);
-                    } else {
-                        return element.style[prop]
-                    }
-                };
-                element.getChildren = () => {
-                    let childs = [];
-                    let traverse = (el) => {
-
-                        let children = el.children;
-                        for (let i = 0; i < children.length; i++) {
-                            children[i] = methods(children[i]);
-                            children[i].parent = el;
-                            children[i].index = i;
-
-
-                            childs.push(children[i]);
-                            traverse(children[i]);
-                        }
-
-
-                    };
-                    element.forEach = (callback) => {
-                        childs.forEach((item) => {
-                            callback(item);
-
-                        });
-                        return methods(element);
-                    };
-                    element.map = (callback, index) => {
-                        if (index) {
-                            childs.forEach((item) => {
-                                callback(item, index);
-                            });
-                        } else {
-                            childs.forEach((item) => {
-                                callback(item);
-                            });
-                        }
-                        return methods(element);
-                    };
-                    traverse(element);
-                    return childs;
-
-                };
-
-
-                return element;
-            }
-
-            dox = {
-                route: () => {
-                    return window.currentRoute
-                },
-                currentRender: () => {
-                    return currentRender
-                },
-                setProp: (element, prop, value) => {
                    
-                    let el = html.querySelector(element)
-                     
-                    if (el) {
-                        el.setAttribute(prop, value)
-                        rerender()
-                    }
-                    return methods(el)
-                },
-                current: () =>{
-                    // check if this fucntion is inside of a attribute like <button onclick="dox.current()">
-
-                    let element = document.activeElement
-                     
-                    if(element){
-                         element.isActive = true
-                         return methods(element)
-                    }
-                },
-                domChange: (type, eventive = false, callback = () => { }) => {
-
-
-                    var initialRenderCompleted = false;
-
-                    var observer = new MutationObserver(function (mutations) {
-                        if (initialRenderCompleted && type === 'changed') {
-                            mutations.forEach(function (mutation) {
-                                callback(mutation);
-                            });
-                        } else {
-
-                            callback()
-                        }
-                    });
-
-                    observer.observe(document, {
-                        childList: true,
-                        subtree: true
-                    });
-
-                    // only work after initial render
-                    setTimeout(() => {
-                        initialRenderCompleted = true;
-                        if (eventive) {
-                            // base callback if user wants to do something after initial render
-                            callback()
-                        }
-
-
-                    }, 100);
-                },
-
-                setVar: (name, value) => {
-                    window[name] = value;
-                    window.postMessage({
-                        type: 'setVar',
-                        data: {
-                            name: name,
-                            value: value
-                        }
-                    }, window.location.origin);
+                if(htm.querySelector(name).getAttribute(prop)){
+                    window.props[prop] = window.props[prop].replace(/"/g, '');
                     
-                },
-                add: (element, attributes) => {
-                    let el = document.createElement(element);
+                    html.querySelector(name).outerHTML = html.querySelector(name).outerHTML.replaceAll('{{'+prop+'}}',  htm.querySelector(name).getAttribute(prop));
+                    
+                }else{
+                    window.props[prop] = window.props[prop].replace(/"/g, '');
+                    html.querySelector(name).outerHTML = html.querySelector(name).outerHTML.replaceAll('{{'+prop+'}}', window.props[prop]);
+                    
+                }
+                 
+                      
+                    
+               
+             });
+             htm.querySelector(name).innerHTML = html.body.querySelector(name).innerHTML;
+              
+          });
+           
+        });
+  
+      fetchPromises.push(fetchPromise);
+    }
+  
+    return Promise.all(fetchPromises).then(function() {
+      return htm;
+    });
+  }
+  Promise.all(fetchPromises)
+  .then(function(fetchedTemplates) {
+    templates = fetchedTemplates;
+    return Promise.all(
+      templates.map(function(template) {
+        let d = parser.parseFromString(template.data, 'text/html');
+        if (d.body.outerHTML.includes('`')) {
+          let code = d.body.outerHTML.split('```')[1];
+          d.body.outerHTML = d.body.outerHTML.replaceAll('```' + code + '```', '<!-- ' + code + ' -->');
+        }
+        let { beforeRenderScripts } = handleScripts(d);
+        let fetchPromises = [];
 
-                    if (attributes) {
-                        Object.keys(attributes).forEach((key) => {
-                            el.setAttribute(key, attributes[key]);
-                        });
-                    }
-                    el = methods(el);
-
-                    return methods(el);
-
-                },
-
-                title: (title) => {
-                    document.title = title;
-                },
-
-                querySelector: (selector) => {
-
-                    let el = document.querySelector(selector)
-
-                    if (el) {
-
-                        el = methods(el);
-
-                    }
-                    return el
-
-
-                },
-
-                querySelectorAll: (selector) => {
-
-                    let element = currentRender
-
-                    let els = element.querySelectorAll(selector) || html.querySelectorAll(selector) || body.querySelectorAll(selector) || null;
-                    let elements = [];
-                    els.forEach((item) => {
-                        elements.push(methods(item));
-                    });
-                    return elements;
-
-                },
-                html: document.querySelector('html').innerHTML,
-                text: document.querySelector('html').innerText,
-                on: (event, callback) => {
-
-                    window.addEventListener(event, callback);
-                },
-                post: (url, data, callback, headers) => {
-                    // check if data is object - text or json
-                    if (typeof data === 'object') {
-                        data = JSON.stringify(data);
-                        fetch(url, {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                headers
-                            },
-                            body: data,
-                        })
-                            .then((response) => {
-                                if (headers.responseType == 'json') {
-                                    return response.json()
-                                } else {
-                                    return response.text()
-                                }
-                            })
-                    }
-                    else if (typeof data === 'string') {
-
-                        fetch(url, {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'text/plain',
-                                headers
-                            },
-                            body: data,
-                        })
-                            .then((response) => {
-                                if (headers.responseType == 'json') {
-                                    return response.json()
-                                } else {
-                                    return response.text()
-                                }
-                            })
-                            .then((data) => {
-                                callback(data);
-                            });
-
-                    } else if (JSON.parse(data)) {
-                        fetch(url, {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                headers
-                            },
-                            body: JSON.stringify(data),
-
-                        })
-                            .then((response) => response.json())
-                            .then((data) => {
-                                callback(data);
-                            });
-                    }
-
-                },
-                get: (url, callback, headers) => {
-                    fetch(url, {
-                        method: 'GET',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            headers
-                        },
-                    })
-                        .then((response) => response.json())
-                        .then((data) => {
-                            callback(data);
-                        });
-                },
-                put: (url, data, callback, headers) => {
-                    fetch(url, {
-                        method: 'PUT',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            headers
-                        },
-                        body: JSON.stringify(data),
-                    })
-                        .then((response) => response.json())
-                        .then((data) => {
-                            callback(data);
-                        });
-                },
-                delete: (url, callback, headers) => {
-                    fetch(url, {
-                        method: 'DELETE',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            headers
-                        },
-                    })
-                        .then((response) => response.json())
-                        .then((data) => {
-                            callback(data);
-                        });
-                },
-                setMeta: (name = null, property = null, content, other = false, discord = false) => {
-                    if (property) {
-                        if (discord) {
-                            if (content.includes('https') || content.includes('http')) {
-                                content = content + '?a=b'
-                                return
-                            }
-                        }
-                        if (document.querySelector(`meta[property="${property}"]`)) {
-                            document.querySelector(`meta[property="${property}"]`).setAttribute('content', content)
-
-                            if (other) document.querySelector(`meta[property="${property}"]`).setAttribute(other, content);
-                            return
-                        }
-                        else {
-
-                            let meta = document.createElement('meta');
-                            if (discord) {
-                                if (content.includes('https') || content.includes('http')) {
-                                    content = content + '?a=b'
-                                    return
-                                }
-                            }
-                            if (other) {
-
-                                Object.keys(other).forEach((item) => {
-                                    cosole.log(item)
-                                    meta.setAttribute(item, other[item])
-                                })
-                            }
-                            meta.setAttribute('property', property);
-                            meta.setAttribute('content', content);
-                            if (name) meta.setAttribute('name', name);
-                            document.querySelector('head').appendChild(meta);
-                        }
-
-                    }
-                    else if (name) {
-
-                        let meta = document.createElement('meta');
-                        meta.setAttribute('name', name);
-                        meta.setAttribute('content', content);
-                        if (other) {
-
-                            Object.keys(other).forEach((item) => {
-
-                                meta.setAttribute(item, other[item])
-                            })
-                        }
-                        document.querySelector('head').appendChild(meta);
-                    }
-                },
-
-
-
-
-
-
-            }
-
+        beforeRenderScripts.forEach(function(script) {
+         
+          if (script.includes('fetch')) {
+            setDox( d);
+            let fetchPromise = eval(script); // Execute fetch request
+            fetchPromises.push(fetchPromise);
+          } else if (script.includes('dox')) {
+            setDox(d);
+            eval(script);
+          }  
         });
 
-    }
+        return Promise.all(fetchPromises)
+          .then(function() {
+            return handleImports(d);
+          })
+          .then(function(updatedHtml) {
+            let { html, beforeRenderScripts, afterRenderScripts } = handleScripts(updatedHtml);
 
+            beforeRenderScripts.forEach(function(script) {
+              if (script.includes('dox')) {
+                setDox(html);
+                eval(script);
+              }  
+            });
 
-    html.querySelectorAll('var').forEach((item) => {
-         
-        if (item.hasAttribute('typeof')) {
-            let type = item.getAttribute('typeof').split('{{:')[1].split('}}')[0];
-            let value = item.innerHTML;
-             
+            template.data = html.body.innerHTML;
+
+            afterRenderScripts.forEach(function(script) {
+                
+                eval(script);
+                
+            });
+            return template;
+          });
+      })
+    );
+  })
+  .then(function(updatedTemplates) {
+    updatedTemplates.forEach(function(template) {
+      window[template.name] = template.data;
+      window.dox = dox;
+      let methods =  {
+  
+      
+        hashChangeListener: null,
+        rootElement: null,
         
-            if (type === '<Json>') {
-              try {
-                 JSON.parse(value);
-                 
-              } catch (error) {
-                throw new Error(`Invalid value for type "${type}": ${value} (expected JSON)`);
+        title: (title) => {
+          if (hooked) {
+            throw new Error("Cannot send headers after they where already sent please refrain from using double res functions and call res.return() to resend to client");
+          }
+          document.title = title;
+          hooked = true;
+        },
+      
+        setCookie: (name, value, options) => {
+          if (hooked) {
+            throw new Error("Cannot send headers after they where already sent please refrain from using double res functions and call res.return() to resend to client");
+          }
+          let cookieString = `${name}=${value};`;
+          if (options) {
+            if (options.path) {
+              cookieString += `path=${options.path};`;
+            }
+            if (options.domain) {
+              cookieString += `domain=${options.domain};`;
+            }
+            if (options.maxAge) {
+              cookieString += `max-age=${options.maxAge};`;
+            }
+            if (options.httpOnly) {
+              cookieString += `httpOnly=${options.httpOnly};`;
+            }
+            if (options.secure) {
+              cookieString += `secure=${options.secure};`;
+            }
+            if (options.sameSite) {
+              cookieString += `sameSite=${options.sameSite};`;
+            }
+          }
+          document.cookie = cookieString;
+      
+        },
+        getCookie: (name) => {
+          const cookies = document.cookie.split(';');
+          for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            const cookieName = cookie.split('=')[0];
+            if (cookieName === name) {
+              const cookieValue = cookie.split('=')[1];
+              const cookieOptions = cookie.split(';').slice(1).map(option => {
+                const [key, value] = option.split('=').map(str => str.trim());
+                return { [key]: value };
+              }).reduce((acc, curr) => Object.assign(acc, curr), {});
+              return {
+                name: cookieName,
+                value: cookieValue
+              };
+            }
+          }
+          return null;
+        },
+        saveState: () => {
+          if (hooked) {
+            throw new Error("State has already been saved cannot save again");
+          }
+          const route = window.location.hash.substring(1);
+          // save the current route in history
+          if (window.sessionStorage.getItem(route)) {
+            window.location.hash = window.sessionStorage.getItem(route);
+          } else {
+            window.sessionStorage.setItem(route, route);
+          }
+          hooked = true;
+      
+        },
+        restoreState: () => {
+          if (hooked) {
+            throw new Error("State has already been restored cannot restore again");
+          }
+          // restore the current route in history
+          let route = window.location.hash.substring(1);
+          if (window.sessionStorage.getItem(route)) {
+            window.location.hash = window.sessionStorage.getItem(route);
+          } else {
+            window.location.hash = this.currentUrl;
+          }
+          hooked = true;
+        },
+        send: (data) => {
+          if (hooked) {
+            throw new Error("Cannot send headers after they where already sent please refrain from using double res functions and call res.return() to resend to client");
+          }
+          
+          
+          document.getElementById(methods.rootElement).innerHTML = data;
+          hooked = true;
+        },
+        render: ($elName) => {
+          if (hooked) {
+            throw new Error("Cannot send headers after they where already sent please refrain from using double res functions and call res.return() to resend to client");
+          }
+           
+         
+          document.getElementById(methods.rootElement).innerHTML = window[$elName];
+      
+          hooked = true;
+        },
+        return: () => {
+          if (hooked) {
+            hooked = false;
+          }
+          if (methods.hashChangeListener) {
+            window.removeEventListener("hashchange",  methods.hashChangeListener);
+             methods.hashChangeListener = null;
+            console.log("removed last event listener")
+          }
+        },
+        sendStatus: (msg, code) => {
+          if (hooked) {
+            throw new Error("Cannot send headers after they where already sent please refrain from using double res functions and call res.return() to resend to client");
+          }
+      
+          if (typeof code === 'number') {
+            document.getElementById(this.rootElement).innerHTML = JSON.stringify({ msg, code });
+            hooked = true;
+          } else {
+            throw new Error("Invalid status code");
+          }
+      
+      
+      
+        },
+       
+        redirect: (url) => {
+      
+          if (hooked) {
+            throw new Error("Cannot send headers after they where already sent please refrain from using double res functions and call res.return() to resend to client");
+          }
+          window.location.hash = url;
+          hooked = true;
+      
+        },
+       
+        sendFile: (file) => {
+          let element = this.rootElement
+          if (hooked) {
+            throw new Error("Cannot send headers after they where already sent please refrain from using double res functions and call res.return() to resend to client");
+          }
+      
+          let xhr = new XMLHttpRequest();
+          xhr.open('GET', file);
+          xhr.responseType = 'blob';
+          xhr.onload = function () {
+            if (file.endsWith(".png" || ".jpg" || ".jpeg" || ".gif" || ".svg" || ".ico")) {
+              document.getElementById(element).style = `
+              position: fixed;
+             top: 0;
+            left: 0;
+           width: 100%;
+         height: 100%;
+        background-color: black;
+              
+              `;
+              document.getElementById(element).innerHTML = ` 
+      <img src="${file}" style="resize: none; border: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);"/>`
+            } else if (file.endsWith(".json")) {
+              fetch(file)
+                .then(response => response.json())
+                .then(data => {
+                  const jsonData = JSON.stringify(data);
+                  const html = `<textarea style="width:100%;height:100%; resize:none; border:none;">${jsonData}</textarea>`
+                  document.getElementById(element).innerHTML = html;
+                })
+            } else if (file.endsWith(".js")) {
+              fetch(file)
+                .then(response => response.text())
+                .then(data => {
+                  const html = `<textarea style="width:100%;height:100%; resize:none; border:none;">${data}</textarea>`
+                  document.getElementById(element).innerHTML = html;
+                })
+            } else if (file.endsWith(".css")) {
+              fetch(file)
+                .then(response => response.text())
+                .then(data => {
+                  const html = `<textarea style="width:100%;height:100%; resize:none; border:none;">${data}</textarea>`
+                  document.getElementById(element).innerHTML = html;
+                })
+            } else if (file.endsWith(".html")) {
+              fetch(file)
+                .then(response => response.text())
+                .then(data => {
+                  const html = `<textarea style="width:100%;height:100%; resize:none; border:none;">${data}</textarea>`
+                  document.getElementById(element).innerHTML = html;
+                })
+            } else if (file.endsWith(".img") || file.endsWith(".png") || file.endsWith(".jpg") || file.endsWith(".jpeg") || file.endsWith(".gif") || file.endsWith(".svg") || file.endsWith(".ico")) {
+              document.getElementById(element).innerHTML = `
+                  <img src="${file}" 
+                  
+                  style="width:100%;height:100%; resize:none; border:none; position:absolute; top:0; left:0;"
+                   
+                  />
+                  `
+            } else if (file.endsWith(".pdf")) {
+              document.getElementById(element).innerHTML = `
+                  <embed src="${file}" 
+                  
+                  style="width:100%;height:100%; resize:none; border:none; position:absolute; top:0; left:0;"
+                   
+                  />
+                  `
+            } else if (file.endsWith('.mp4') || file.endsWith('.webm') || file.endsWith('.ogg')) {
+              let video = document.createElement('video');
+              video.src = file;
+              video.controls = true;
+              document.getElementById(element).appendChild(video);
+            } else {
+              let audio = document.createElement('audio');
+              audio.src = file;
+              audio.controls = true;
+              document.getElementById(element).appendChild(audio);
+            }
+            let a = document.createElement('a');
+            a.href = window.URL.createObjectURL(xhr.response);
+            a.download = file;
+            a.click();
+          };
+          xhr.send();
+        }
+      }
+      class Router {
+          constructor() {
+            this.routes = {};
+            this.currentUrl = ''
+            this.store = {};
+            this.rootElement = null;
+            this.hashChangeListener = null;
+            this.listeners = {}
+            this.storedroutes = []
+            this.errorcheck = null;
+            this.headers = {}
+            this.customerror = null;
+            this.hooked = false;
+          }
+        
+          get(path, callback) {
+        
+            const paramNames = [];
+            const queryNames = [];
+            const parsedPath = path.split('/').map(part => {
+              if (part.startsWith(':')) {
+                paramNames.push(part.substring(1));
+                return '([^/]+)';
               }
-            } else if (type === '<String>') {
-              if (value === 'true' || value === 'false' || value === 'null') {
-                throw new Error(`Invalid value for type "${type}": ${value} (expected string)`);
+              if (part.startsWith('*')) {
+                paramNames.push(part.substring(1));
+                return '(.*)';
               }
-            } else if (type === '<Number>') {
-              if (isNaN(parseFloat(value)) || !isFinite(value)) {
-                throw new Error(`Invalid value for type "${type}": ${value} (expected number)`);
+              if (part.startsWith('?')) {
+                queryNames.push(part.substring(1));
+                return '([^/]+)';
               }
-            } else if (type === '<Boolean>') {
-              if (value !== 'true' && value !== 'false') {
-                throw new Error(`Invalid value for type "${type}": ${value} (expected boolean)`);
+              return part;
+            }).join('/');
+            const regex = new RegExp('^' + parsedPath + '(\\?(.*))?$');
+        
+        
+        
+            if (window.location.hash.substring(1).match(regex)) {
+              this.storedroutes.push(window.location.hash.substring(1))
+              this.hooked = true;
+              this.routes[path] = true
+              const matches = window.location.hash.substring(1).match(regex);
+              const params = {};
+        
+              for (let i = 0; i < paramNames.length; i++) {
+                params[paramNames[i]] = matches[i + 1];
               }
-            } else if (type === '<Array>') {
-              try {
-                let parsedValue = JSON.parse(value);
-                if (!Array.isArray(parsedValue)) {
-                  throw new Error(`Invalid value for type "${type}": ${value} (expected array)`);
+              if (path.includes(":") && window.location.hash.substring(1).split("?")[1]) {
+                if (debug.enabled) {
+                  debug.log([`
+                    Cannot use query params with path params ${path} ${window.location.hash.substring(1).split("?")[1]}`], "assert");
                 }
-              } catch (error) {
-                throw new Error(`Invalid value for type "${type}": ${value} (expected array)`);
+        
+                return false;
+              }
+              const query = {};
+        
+              const queryString = window.location.hash.substring(1).split('?')[1];
+              if (queryString) {
+                const queryParts = queryString.split('&');
+                for (let i = 0; i < queryParts.length; i++) {
+                  const queryParam = queryParts[i].split('=');
+                  query[queryParam[0]] = queryParam[1];
+                }
+              }
+        
+              const req = {
+                "params": params,
+                "query": query,
+                "url": window.location.hash.substring(1),
+                "method": "GET",
+              }
+        
+        
+              
+               
+            
+              methods.rootElement = this.rootElement
+              methods.hashChangeListener = this.hashChangeListener
+              const res =  methods
+               
+        
+              callback(req, res);
+        
+              return true;
+            }
+            
+        
+            this.hooked = false;
+            return false;
+          }
+          error(callback) {
+            
+            this.errorcheck = true;
+        
+            const handleHashChange = () => {
+              if (!this.storedroutes.includes(window.location.hash.substring(1))) {
+               
+               
+                const res = methods
+        
+                if (this.customerror === null) {
+                 document.getElementById(this.rootElement).innerHTML = `<code>Cannot GET ${window.location.hash.substring(1)}</code>`;
+                } else {
+                  callback(res);
+                }
+              }
+            };
+        
+            window.onhashchange = handleHashChange;
+        
+            const res = methods
+        
+            if (!this.storedroutes.includes(window.location.hash.substring(1))) {
+              if (!this.customerror) {
+                document.getElementById(this.rootElement).innerHTML = `<code>Cannot GET ${window.location.hash.substring(1)}</code>`;
+              } else {
+                callback(res);
+              }
+            }
+          }
+        
+          root(path, callback) {
+            const paramNames = [];
+            const queryNames = [];
+            const currentPath = window.location.hash.substring(1);
+        
+            if (!this.hooked && !this.storedroutes.includes(currentPath)) {
+              this.storedroutes.push(currentPath);
+              window.location.hash = currentPath;
+            }
+        
+            const parsedPath = path.split('/').map(part => {
+              if (part.startsWith(':')) {
+                paramNames.push(part.substring(1));
+                return '([^/]+)';
+              }
+              if (part.startsWith('*')) {
+                paramNames.push(part.substring(1));
+                return '(.*)';
+              }
+              if (part.startsWith('?')) {
+                queryNames.push(part.substring(1));
+                return '([^/]+)';
+              }
+              return part;
+            }).join('/');
+        
+            const regex = new RegExp('^' + parsedPath + '(\\?(.*))?$');
+        
+            if (currentPath === '') {
+              if (paramNames.length === 0) {
+                window.location.hash = path;
+              } else {
+                const updatedPath = path.split('/').map(part => {
+                  if (part.startsWith(':')) {
+                    return '';
+                  }
+                  return part;
+                }).join('/');
+                window.location.hash = updatedPath;
               }
             } else {
-              throw new Error(`Unsupported type: ${type}`);
-            }
-          }
-      });
-      
-
-  
-
-
-    
-    
-
-}
-
-
-
-
-
-class Router {
-    constructor(routes) {
-        this.routes = routes || {};
-        this.currentRoute = '';
-
-        // Attach event listeners to handle hash changes and DOMContentLoaded
-        window.addEventListener('hashchange', () => {
-             this.route();
-             rerender()
-        });
-        window.addEventListener('DOMContentLoaded', () => {
-            this.route();
-        });
-
-        this.fallbackRoute = '';
-        this.errorOn = false;
-    }
-
-    route() {
-        window.render = performance.now()
-        
-        const hash = window.location.hash.slice(1); // Remove the "#" character
-        this.currentRoute = hash;
-        this.navigate();
-    }
-
-    render(route) {
-
-        templates.forEach((item) => {
-            let parent = item.parent;
-            let template = item.template;
-            let element = item.element;
-            element.innerHTML = '';
-            if (parent.getAttribute('route') ===  route) {
-                let rendered = window.render - performance.now()
-                rendered = Math.abs(rendered).toFixed(2)
-                
-               
-                document.title = parent.getAttribute('title');
-              
-                window.rerender(element.tagName)
-                 
-               
-               
-                let dom  = new DOMParser().parseFromString(template, 'text/html');
-                 
-                dom.body.innerHTML = dom.body.innerHTML.replace(/{{(.*?)}}}/gs, '');
-                let comment = document.createComment(`${element.tagName} Rendered in ${rendered}ms`);
-                dom.body.prepend(comment)
-                element.innerHTML =  dom.body.innerHTML;
-                window.dox = dox;
-               
-            }  
-        });
-
-    }
-
-    navigate() {
-        let matchingRoute = false;
-      
-        if (this.routes) {
-          Object.keys(this.routes).forEach(async (route) => {
-            const { isMatch, params, query, asterisk } = this.isRouteMatch(this.currentRoute, route);
-      
-          
-            if (isMatch) {
-              matchingRoute = true;
-      
-              if (Object.keys(query).length > 0 && window.location.hash.includes('?')) {
-                route = window.location.hash.split('?')[0].replace('#', '');
-                const routeHandler = this.routes[route];
-                this.render(route);
-               
-                routeHandler({ params, query });
-                window.dox = window.dox || {};
-                return;
-              } else if (Object.keys(params).length > 0 && !window.location.hash.includes('?')) {
-                const routeHandler = this.routes[route];
-                const routeWithoutParams = route.split('/:')[0];
-                // Render the corresponding route
-                this.render(routeWithoutParams);
-      
-                
-                routeHandler({ params, query });
-      
-                window.dox = window.dox || {};
-      
-                return;
-              } else if (asterisk) {
-               
-                const routeHandler = this.routes[route];
-                const routeWithoutAsterisk =  route.split('/*')[0];
-                this.render(routeWithoutAsterisk);
-      
-               
-      
-                // Pass the asterisk value as a parameter to the route handler
-                routeHandler({ asterisk });
-      
-                window.dox = window.dox || {};
-      
-                return;
-              } else {
-                const routeHandler = this.routes[route];
-                this.render(route);
-      
-               
-                routeHandler({ params, query });
-                window.dox = window.dox || {};
-                return;
+              const match = currentPath.match(regex);
+              if (match) {
+                const params = {};
+                paramNames.forEach((name, index) => {
+                  params[name] = match[index + 1];
+                });
+                const updatedPath = path.split('/').map(part => {
+                  if (part.startsWith(':')) {
+                    return params[part.substring(1)];
+                  }
+                  return part;
+                }).join('/');
+                window.location.hash = updatedPath;
               }
-            }else{
-                this.render('404')
             }
-          });
-        }
-      
-        if (!matchingRoute && this.fallbackRoute) {
-          window.location.hash = '#' + this.fallbackRoute;
-        }
-      }
-
-      isRouteMatch(route, pattern) {
-        const routeSegments = route.split('/').filter((segment) => segment !== '');
-        const patternSegments = pattern.split('/').filter((segment) => segment !== '');
-  
-        if (routeSegments.length !== patternSegments.length && !pattern.includes('*')) {
-          return { isMatch: false };
-        }
-      
-        const params = {};
-        let query = {};
-        let asterisk = '';
-      
-        for (let i = 0; i < patternSegments.length; i++) {
-          const routeSegment = routeSegments[i];
-          const patternSegment = patternSegments[i];
-      
-          if (patternSegment.startsWith(':')) {
-            const paramName = patternSegment.slice(1);
-            const paramValue = routeSegment;
-            params[paramName] = paramValue;
-          } else if (patternSegment.includes('?')) {
-            const patternSegmentsWithQuery = patternSegment.split('?');
-            const queryStr = patternSegmentsWithQuery[1];
-            query = this.extractQuery(queryStr);
-          } else if (patternSegment.includes('*')) {
-            // Capture the remaining path after the asterisk
-            asterisk = routeSegments.slice(i).join('/');
-            break;
-          } else if (routeSegment !== patternSegment) {
-            return { isMatch: false };
+        
+            this.routes[path] = true;
+        
+            this.currentUrl = path;
+        
+            if (window.location.hash.substring(1).match(regex)) {
+              const matches = window.location.hash.substring(1).match(regex);
+              const params = {};
+        
+              for (let i = 0; i < paramNames.length; i++) {
+                params[paramNames[i]] = matches[i + 1];
+              }
+              if (path.includes(":") && window.location.hash.substring(1).split("?")[1]) {
+                
+                    console.error(`
+                   [DoxDom: Cannot use query params with path params ${path} ${window.location.hash.substring(1).split("?")[1]}
+                  `)
+                   
+              
+                return false;
+              }
+              const query = {};
+        
+              const queryString = window.location.hash.substring(1).split('?')[1];
+              if (queryString) {
+                const queryParts = queryString.split('&');
+                for (let i = 0; i < queryParts.length; i++) {
+                  const queryParam = queryParts[i].split('=');
+                  query[queryParam[0]] = queryParam[1];
+                }
+              }
+              const req = {
+                "params": params,
+                "query": query,
+                "url": window.location.hash.substring(1),
+                "method": "ROOT_GET",
+              }
+        
+        
+        
+        
+              methods.rootElement = this.rootElement
+              methods.hashChangeListener = this.hashChangeListener
+              const res =  methods
+             
+              if (!this.hashChangeListener) {
+                this.hashChangeListener = () => {
+                  if (window.location.hash.substring(1).match(regex)) {
+                    const matches = window.location.hash.substring(1).match(regex);
+                    const params = {};
+                    for (let i = 0; i < paramNames.length; i++) {
+                      params[paramNames[i]] = matches[i + 1];
+                    }
+        
+                    const req = {
+                      params: params,
+                      rootUrl: this.currentUrl,
+                      url: window.location.hash.substring(1),
+                    };
+        
+                    const res = methods
+        
+                    callback(req, res);
+                  }
+                };
+        
+                window.addEventListener("hashchange", this.hashChangeListener);
+              }
+        
+              callback(req, res);
+        
+              return true;
+            }
+        
+            return false;
           }
-        }
-      
-        return { isMatch: true, params, query, asterisk };
-      }
-      
-      
- 
-
-    get(route, handler) {
-        this.routes[route] = handler;
-    }
-
-    redirect(route) {
-        window.location.hash = '#' + route;
-    }
-
-    extractParams(route, pattern) {
-        const routeSegments = route.split('/').filter((segment) => segment !== '');
-        const patternSegments = pattern.split('/').filter((segment) => segment !== '');
-        const params = {};
-
-        for (let i = 0; i < patternSegments.length; i++) {
-            const patternSegment = patternSegments[i];
-
-            if (patternSegment.startsWith(':')) {
-                const paramName = patternSegment.slice(1);
-                const paramValue = routeSegments[i];
-                params[paramName] = paramValue;
-            }
-        }
-
-        return params;
-    }
-    extractQuery(route) {
-        const queryIndex = route.indexOf('?');
-        if (queryIndex !== -1) {
-            const queryStr = route.slice(queryIndex + 1);
-            const queryPairs = queryStr.split('&');
-            const query = {};
-
-            queryPairs.forEach((pair) => {
-                const [key, value] = pair.split('=');
-                query[key] = decodeURIComponent(value); // Decode URI component to handle special characters
-            });
-
-            return query;
-        }
-
-        return {};
-    }
-    extractAsterics(route) {
-        const queryIndex = route.indexOf('*');
-        // /route/* - returns /route/anything/here/anything/here
-        if (queryIndex !== -1) {
-            const queryStr = route.slice(queryIndex + 1);
-            const queryPairs = queryStr.split('&');
-            const query = {};
-
-            queryPairs.forEach((pair) => {
-                const [key, value] = pair.split('=');
-                query[key] = decodeURIComponent(value); // Decode URI component to handle special characters
-            });
-
-            return query;
-        }
-    }
-
-}
-
- 
-async function setData(data, html, body, item) {
-
-
-
-    let dom = new DOMParser();
-    let dhtml = dom.parseFromString(data, 'text/html').body
-
-    let props = {};
-
-    dhtml.querySelectorAll('*').forEach((item) => {
-
-        item.style.display = 'none';
-        let varName = item.getAttribute('name');
-
-        let varValue = item.innerHTML;
-        window[varName] = varValue;
-        dhtml.innerHTML = dhtml.innerHTML.replace(`{{${varName}}}`, varValue);
-
-        item.remove();
-
-        if (item.tagName === 'var') {
-            item.style.display = 'none';
-            let varName = item.getAttribute('name');
-            let varValue = item.innerHTML;
-            window[varName] = varValue;
-
-            dhtml.querySelectorAll('*').forEach((element) => {
-                let matches = element.innerHTML.match(/{{(.*?)}}/g);
-                if (matches && element.innerHTML.includes(`{{${varName}}}`)) {
-                    matches.forEach((match) => {
-                        element.innerHTML = element.innerHTML.replace(match, varValue);
-                    });
-                }
-            });
-            if (item.hasAttribute('typeof')) {
-                let type = item.getAttribute('typeof').split('{{:')[1].split('}}')[0];
-                let value = varValue;
-
-                if (type === '<Json>') {
-                    try {
-                        let parsedValue = JSON.parse(value);
-
-                    } catch (error) {
-                        throw new Error(`Invalid value for type "${type}": ${value} (expected JSON)`);
-                    }
-                } else if (type === '<String>') {
-                    if (value === 'true' || value === 'false' || value === 'null') {
-                        throw new Error(`Invalid value for type "${type}": ${value} (expected string)`);
-                    }
-                } else if (type === '<Number>') {
-                    if (isNaN(parseFloat(value)) || !isFinite(value)) {
-                        throw new Error(`Invalid value for type "${type}": ${value} (expected number)`);
-                    }
-                } else if (type === '<Boolean>') {
-                    if (value !== 'true' && value !== 'false') {
-                        throw new Error(`Invalid value for type "${type}": ${value} (expected boolean)`);
-                    }
-                } else if (type === '<Array>') {
-                    try {
-                        let parsedValue = JSON.parse(value);
-                        if (!Array.isArray(parsedValue)) {
-                            throw new Error(`Invalid value for type "${type}": ${value} (expected array)`);
-                        }
-                    } catch (error) {
-                        throw new Error(`Invalid value for type "${type}": ${value} (expected array)`);
-                    }
+        
+          post(path, callback) {
+        
+        
+            let hooked = false;
+            this.sendContent = null
+            const res = {
+              set: (name, value) => {
+                  let accepted = [
+                    "Accept",
+                    "Accept-Charset",
+                    "Accept-Encoding",
+                    "Accept-Language",
+                    "Accept-Datetime",
+                    "Access-Control-Request-Method",
+                    "Access-Control-Request-Headers",
+                    "Authorization",
+                    "Cache-Control",
+                    "Connection",
+                    "Cookie",
+                    "Content-Length",
+                    "Content-MD5",
+                    "Content-Type",
+                    "Date",
+                  ]
+                  if (!accepted.includes(name)) {
+                    throw new Error({
+                      message: "Invalid header name",
+                      name: name,
+                      accepted_headers: accepted
+                    })
+                  }
+                  if (typeof value !== 'string') {
+                    throw new Error("Invalid header value");
+                  }
+                  this.headers[name] = value;
+          
+          
+                },
+              json: (data) => {
+                if (this.headers["Content-Type"] == "application/json") {
+                  if (hooked) {
+                    throw new Error("Cannot send headers after they where already sent please refrain from using double res functions and call res.return() to resend to client");
+                  }
+                  try {
+                    const jsonData = JSON.stringify(data);
+                    this.sendContent = jsonData
+                    hooked = true;
+                  } catch (e) {
+                    throw new Error("Invalid JSON data");
+                  }
                 } else {
-                    throw new Error(`Unsupported type: ${type}`);
+                  throw new Error("Content-Type header must be set to application/json")
                 }
-            }
-
-        }
-        else if (item.hasAttribute('props')) {
-            let name = item.tagName;
-            if (html.querySelector(name)) {
-                let $props = item.getAttribute('props').split(':');
-                $props.forEach(async (prop) => {
-                    props[name] = $props;
-                    sessionStorage.setItem('$dox-props', JSON.stringify(props))
-
-                    if (prop == 'children') {
-
-                        if (html.querySelector(name).querySelector('slot')) {
-                            if (dhtml.querySelector(name).innerHTML.includes('{{children}}')) {
-                                if (proptemplates.length > 0) {
-                                    proptemplates.forEach((item) => {
-                                        if (item.parent == dhtml.querySelector(name).parentNode) {
-                                            dhtml.querySelector(name).innerHTML = item.template
-                                        }
-                                    })
-
-                                }
-                                proptemplates.push({
-                                    element: dhtml.querySelector(name),
-                                    template: dhtml.querySelector(name).innerHTML,
-                                    parent: dhtml.querySelector(name).parentNode ? dhtml.querySelector(name).parentNode : null,
-                                })
-
-
-                                dhtml.querySelector(name).innerHTML = dhtml.querySelector(name).innerHTML.replace(`{{children}}`, html.querySelector(name).querySelector('slot').innerHTML);
-
-
-
-                            }
-                        }
-                    } else {
-                        if (html.querySelector(name).getAttribute(prop)) {
-
-                            if (proptemplates.length > 0) {
-                                proptemplates.forEach((item) => {
-
-                                    if (dhtml.querySelector(name).innerHTML.includes(`{{${prop}}}`)) {
-                                        dhtml.querySelector(name).innerHTML = dhtml.querySelector(name).innerHTML.replace(`{{${prop}}}`, html.querySelector(name).getAttribute(prop));
-
-                                    }
-                                })
-
-                            }
-                            if (dhtml.querySelector(name).innerHTML.includes(`{{${prop}}}`)) {
-                                proptemplates.push({
-                                    element: dhtml.querySelector(name),
-                                    template: dhtml.querySelector(name).innerHTML,
-                                    parent: dhtml.querySelector(name).parentNode ? dhtml.querySelector(name).parentNode : null,
-                                })
-
-                                let value = html.querySelector(name).getAttribute(prop);
-                                dhtml.querySelector(name).innerHTML = dhtml.querySelector(name).innerHTML.replace(`{{${prop}}}`, value);
-                            }
-                        }
-                    }
-                });
-            }
-            let attributes = Object.values(item.attributes);
-
-
-            attributes.forEach((attr) => {
-
-                let attrValue = attr.value;
-
-                if (attrValue.includes('{{')) {
-                    let matches = attrValue.match(/{{(.*?)}}/g);
-
-                    if (matches) {
-                        matches.forEach((match) => {
-                            let value = match.replace('{{', '').replace('}}', '');
-                            let prop = element.parentNode.getAttribute(value);
-                            let parent = document.querySelector(element.parentNode.tagName);
-                            if (parent && parent.getAttribute(value)) {
-                                prop = parent.getAttribute(value);
-                            }
-                            attrValue = attrValue.replace(new RegExp(`{{${value}}}`, 'g'), prop);
-                        });
-                        element.setAttribute(attr.name, attrValue);
-                    }
+              },
+              jsonp: (data) => {
+                if (this.headers["Content-Type"] == "application/json") {
+                  if (hooked) {
+                    throw new Error("Cannot send headers after they where already sent please refrain from using double res functions and call res.return() to resend to client");
+                  }
+                  try {
+                    const jsonData = JSON.stringify(data);
+                    this.sendContent = `callback(${jsonData})`
+                    hooked = true;
+                  } catch (e) {
+                    throw new Error("Invalid JSON data");
+                  }
+                } else {
+                  throw new Error("Content-Type header must be set to application/json")
                 }
-            });
-            let matches = item.innerHTML.match(/{{(.*?)}}/g);
-
-            if (matches) {
-                matches.forEach((match) => {
-
-                    let value = match.split('{{')[1].split('}}')[0];
-                    let el = dhtml.querySelector(item.tagName);
-                    let parent = el.parentNode.tagName;
-                    html.querySelectorAll('*').forEach((item) => {
-                        if (item.tagName == parent) {
-                            let prop = item.getAttribute(value);
-                            if (prop) {
-                                if (prop.toString().toLowerCase() == 'true') {
-                                    prop = prop.toString().toLowerCase();
-                                }
-                                let attrValue = element.innerHTML.replace(new RegExp(`{{${value}}}`, 'g'), prop);
-                                element.innerHTML = attrValue;
-                            }
-                        }
-                    });
-                });
-            }
-            if (item.hasAttribute('state')) {
-                let state = element.getAttribute('state')
-
-
-                element.innerHTML = element.innerHTML + getState(state)
-                if (document.querySelector(element.tagName)) {
-                    document.querySelector(element.tagName).innerHTML = element.innerHTML
+        
+              },
+        
+              text: (data) => {
+                if (this.headers["Content-Type"] == "text/plain") {
+                  if (hooked) {
+                    throw new Error("Cannot send headers after they where already sent please refrain from using double res functions and call res.return() to resend to client");
+                  }
+                  try {
+                    const textData = data;
+                    this.sendContent = textData
+                    hooked = true;
+                  } catch (e) {
+                    throw new Error("Invalid text data");
+                  }
                 }
-                effect((state), (state) => {
-                    if (document.querySelector(element.tagName)) {
-                        document.querySelector(element.tagName).innerHTML = state
-                    }
+              },
+              return: () => {
+                if (hooked) {
+                  hooked = false;
+                }
+                if (this.hashChangeListener) {
+                  window.removeEventListener("hashchange", this.hashChangeListener);
+                  this.hashChangeListener = null;
+                  console.log("removed last event listener")
+                }
+              },
+        
+            }
+        
+        
+            callback(res)
+        
+            const message = {
+              path: path,
+              data: this.sendContent,
+              headers: this.headers
+            }
+            window.postMessage(message, "*");
+          }
+        
+        
+        
+        
+          listen(path, callback) {
+            if (this.listeners[path]) {
+              throw new Error(`Listener already registered for route ${path}`);
+            }
+        
+            const listener = (event) => {
+              const messagePath = event.data.path;
+              const data = event.data.data;
+              const headers = event.data.headers;
+        
+              if (messagePath === path) {
+                callback({
+                  "data": data,
+                  "headers": headers,
+                  "method": "POST"
                 })
+              }
+            };
+        
+            window.addEventListener("message", listener);
+            this.listeners[path] = listener;
+          }
+        
+          stopListening(path) {
+            const listener = this.listeners[path];
+        
+            if (listener) {
+              window.removeEventListener("message", listener);
+              delete this.listeners[path];
             }
+          }
+          use(path) {
+        
+            const paramNames = [];
+            const queryNames = [];
+            const parsedPath = path.split('/').map(part => {
+              if (part.startsWith(':')) {
+                paramNames.push(part.substring(1));
+                return '([^/]+)';
+              }
+              if (part.startsWith('*')) {
+                paramNames.push(part.substring(1));
+                return '(.*)';
+              }
+              if (part.startsWith('?')) {
+                queryNames.push(part.substring(1));
+                return '([^/]+)';
+              }
+              return part;
+            }
+            ).join('/');
+            const regex = new RegExp('^' + parsedPath + '(\\?(.*))?$');
+            path = parsedPath;
+            this.routes[path] = true;
+            this.storedroutes.push(path);
+          }
+        
+        
+        
+          bindRoot(element) {
+            this.rootElement = element
+          }
+        
+          onload(callback) {
+            window.onload = () => {
+        
+              window.addEventListener("DOMContentLoaded", callback())
+            }
+          }
+        
+        
+          on(path, callback) {
+            window.addEventListener('hashchange', () => {
+              const paramNames = [];
+              const queryNames = [];
+              const parsedPath = path.split('/').map(part => {
+                if (part.startsWith(':')) {
+                  paramNames.push(part.substring(1));
+                  return '([^/]+)';
+                }
+                if (part.startsWith('*')) {
+                  paramNames.push(part.substring(1));
+                  return '(.*)';
+                }
+                if (part.startsWith('?')) {
+                  queryNames.push(part.substring(1));
+                  return '([^/]+)';
+                }
+                return part;
+              }).join('/');
+              const regex = new RegExp('^' + parsedPath + '(\\?(.*))?$');
+        
+              this.routes[path] = true;
+        
+              this.currentUrl = path;
+        
+              if (window.location.hash.substring(1).match(regex)) {
+                this.storedroutes.push(window.location.hash.substring(1))
+                this.routes[path] = true
+                const matches = window.location.hash.substring(1).match(regex);
+                const params = {};
+        
+                for (let i = 0; i < paramNames.length; i++) {
+                  params[paramNames[i]] = matches[i + 1];
+                }
+                if (path.includes(":") && window.location.hash.substring(1).split("?")[1]) {
+                  console.error("Cannot use query params with path params", path, window.location.hash.substring(1).split("?")[1]);
+                  return false;
+                }
+                const query = {};
+        
+                const queryString = window.location.hash.substring(1).split('?')[1];
+                if (queryString) {
+                  const queryParts = queryString.split('&');
+                  for (let i = 0; i < queryParts.length; i++) {
+                    const queryParam = queryParts[i].split('=');
+                    query[queryParam[0]] = queryParam[1];
+                  }
+                }
+                const req = {
+                  "params": params,
+                  "query": query,
+                  "url": window.location.hash.substring(1),
+                  "method": "POST",
+                }
+        
+        
+                
+                methods.rootElement = this.rootElement
+                methods.hashChangeListener = this.hashChangeListener
+                const res =  methods
+        
+                callback(req, res);
+              }
+            });
+          }
+      }
+      window.Router = new  Router()
+      
+      imports.forEach(function(importElement) {
+        if(importElement.endsWith('.js')){
+           fetch(importElement)
+            .then(response => response.text())
+            .then(data => {
+                eval(data)
+            })
+            
         }
+      });
     });
-
-
-    if (item.getAttribute('exports')) {
-        console.log(item.getAttribute('exports'))
-
-        let exported = item.getAttribute('exports').split(',');
-        exported.forEach(async (exportItem) => {
-
-            let el = dhtml.querySelector(exportItem) ? dhtml.querySelector(exportItem) : html.querySelector(exportItem)
-         
-            document.querySelector(exportItem).innerHTML = el.innerHTML
-
-        });
-    }
-
-
-
-
-
-
-
-
-
-
-}
-
-window.Router = Router;
-window.dox = dox;
- 
-
-const states = {};
-
-// Function to set the state value
-const setState = ($name, $value) => {
-    states[$name] = $value;
-    window.postMessage({ name: $name, value: $value }, '*');
-};
-
-// Function to get the state value
-const getState = ($name) => {
-    return states[$name];
-};
-
-// Event listener to update the state when receiving messages
-window.addEventListener('message', (event) => {
-    if (event.origin !== window.location.origin) return;
-    const { name, value } = event.data;
-    states[name] = value;
-});
-
-// Function to handle side effects based on state changes
-const effect = ($name, callback = () => { }) => {
-    window.addEventListener('message', (event) => {
-        if (event.origin !== window.location.origin) return;
-        const { name, value } = event.data;
-        if (name === $name)
-            callback(value);
-        return;
-    });
-};
-window.effect = effect
-window.getState = getState
-
-window.setState = setState
-window.dox = dox;
-
-
- 
+  })
+  .catch(function(error) {
+    console.error('Error fetching templates:', error);
+  });
