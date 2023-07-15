@@ -9,7 +9,18 @@ A fast sequential dom library with cohesive syntax!
 | <img src="https://th.bing.com/th/id/R.15317f39b369ebfe56a357aaea4860ab?rik=i1CnFnr0QPpDYg&pid=ImgRaw&r=0" width="20"> 113 | ✅      |    
 
 [Docs](https://github.com/MalikWhitten67/html-dox/wiki)
+
+## How it works
+components/pages?  
+sequential selection → 
+value splitting/value replacing →
+execution of after or before scripts* →  
+combining imported components to main pages* → 
+returns as a full webpage* → end → router?
+
 ## Why?
+
+
 
 - I'm tired of regular HTML lacking decent functionality, so I built a library to extend HTML's capabilities similar to React and other libraries.
 - It enforces strict scopes, ensuring that no element can block or await the execution of other elements. Elements are added to the front or back of the chain without interfering with each other.
