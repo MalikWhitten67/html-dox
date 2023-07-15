@@ -1,6 +1,6 @@
 # html-dox
 
-html-dox is a sequential DOM library aimed at making HTML more manageable and faster!
+A fast sequential dom library with cohesive syntax!
 
 | Browser       |  Supported    | 
 | ------------- |:-------------:| 
