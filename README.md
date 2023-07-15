@@ -2,11 +2,6 @@
 
 html-dox is a sequential DOM library aimed at making HTML more manageable and faster!
 
-| Browser       |  Supported    | 
-| ------------- |:-------------:| 
-| <img src="https://th.bing.com/th/id/R.4c5dfa7ec90d6208a2a2e33adbd7c633?rik=cYlZy1p%2f4TEJGQ&riu=http%3a%2f%2f1000logos.net%2fwp-content%2fuploads%2f2017%2f08%2fChrome-Logo.png&ehk=qTc576MkpOTyH91AwsOr6MD868AywziPFN3Z2RxOFWQ%3d&risl=&pid=ImgRaw&r=0" width="20"> 114     | ✅|   
-|<img src="https://cdn.freebiesupply.com/logos/large/2x/firefox-logo-png-transparent.png" width="20"> 113   | ✅     |   
-| <img src="https://th.bing.com/th/id/R.15317f39b369ebfe56a357aaea4860ab?rik=i1CnFnr0QPpDYg&pid=ImgRaw&r=0" width="20"> 113 | ✅      |    
 
 [Docs](https://github.com/MalikWhitten67/html-dox/wiki)
 ## Why?
