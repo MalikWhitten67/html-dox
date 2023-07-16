@@ -758,7 +758,7 @@ let methods =  {
         });
       }
   }
-  window.Router =  Router;
+  window.Router = Router 
   
  
 function handleVariables(html) {
@@ -915,7 +915,7 @@ function doxMethods(element) {
         this[name] = options
         // ex: dox.driver('puppeteer', { headless: false });
       },
-      add: function(tag, attributes) {
+      add: function(tag, attributes = {}) {
         let el = document.createElement(tag);
         Object.keys(attributes).forEach(function(attribute) {
           el.setAttribute(attribute, attributes[attribute]);
@@ -1050,6 +1050,8 @@ function doxMethods(element) {
       let match;
       while ((match = ifRegex.exec(html.body.innerHTML)) !== null) {
         let condition = match[1].trim();
+        condition = condition.replaceAll('&gt;', '>');
+        condition = condition.replaceAll('&lt;', '<');
         let ifStatement = match[2].trim();
         let elseStatement = match[3] ? match[3].trim() : null;
         
@@ -1109,6 +1111,8 @@ function doxMethods(element) {
   
       let h = c.innerHTML;
   
+      h =  h.replace('&gt;', '>');
+       
       // Replace **text** with <strong>text</strong>
       let strongRegex = /\*\*([\s\S]*?)\*\*/g;
   
@@ -1119,12 +1123,14 @@ function doxMethods(element) {
       let emRegex = /\*([\s\S]*?)\*/g;
   
       // Replace > quote with <blockquote>quote</blockquote>
-      let quoteRegex =  /^>\s(.*)$/gm;
+      let quoteRegex =  /> (.+)(\n|$)/g;
   
       let linkRegex = /\[(.*?)\]\((.*?)\)/g;
   
       // Replace --- with <hr>
       let hrRegex = /^---$/gm;
+      let tableRegex = /\|(.+)\|/g;
+
   
       // Replace `code` with <code>code</code>
       let codeRegex = /`([^`]+)`/g;
@@ -1136,13 +1142,32 @@ function doxMethods(element) {
       let olRegex = /\d+\. (.+)(\n|$)/g;
   
       h = h.replace(codeRegex, '<code>$1</code>');
-      h = h.replace(linkRegex, '<a href="$2">$1</a>');
-      h = h.replace(quoteRegex, '<blockquote>$1</blockquote>');
+      h = h.replace(linkRegex, '<a  style="color: #007bff; text-decoration:none" href="$2">$1</a>');
+      h = h.replace(quoteRegex, '<blockquote style="border-left: 5px solid #eeeeee; padding-left: 10px;">$1</blockquote>');
       h = h.replace(hrRegex, '<hr>');
       h = h.replace(strongRegex, '<strong>$1</strong>');
-      h = h.replace(headingRegex, function (match, p1) {
-        const level = match.trim().indexOf('#') + 1;
-        return `<h${level}>${p1.trim()}</h${level}>`;
+      h = h.replace(headingRegex, function(match, p1) {
+        let level = match.split(' ')[0].length;
+        
+        if(level > 6){
+          throw new Error('Heading level cannot be greater than 6');
+        }
+        return '<h' + level + '>' + p1 + '</h' + level + '>';
+      });
+      h = h.replace(tableRegex, function(match, p1) {
+        let rows = p1.split('\n');
+        let table = '<table class="table table-striped table-bordered">';
+        rows.forEach(function(row) {
+          let cols = row.split('|');
+          let tr = '<tr>';
+          cols.forEach(function(col) {
+            tr += '<td>' + col + '</td>';
+          });
+          tr += '</tr>';
+          table += tr;
+        });
+        table += '</table>';
+        return table;
       });
       h = h.replace(emRegex, '<em>$1</em>');
       h = h.replace(ulRegex, '<li>$1</li>');
@@ -1157,36 +1182,15 @@ function doxMethods(element) {
   
   
   
-  function handleProps(html) {
-    Object.keys(window.props).forEach(function(prop) {
-        if(Array.isArray(window.props[prop])){
-            let value =  window.props[prop];
-            value.forEach(function(v){
-               Object.keys(v).forEach(function(vname){
-                   let vvalue = v[vname];
-                   let regex = new RegExp('{{' + prop + '.' + vname  +'}}', 'g');
-                   html.body.innerHTML = html.body.innerHTML.replaceAll(regex, vvalue);
-                    
-               });
-            });
-            return html;
-           
-       }
-       let regex = new RegExp('{{' +  prop + '}}', 'g');
-       html.body.innerHTML = html.body.innerHTML.replaceAll(regex,  window.props[prop]);
-   });
-   return html;
-  }
 
-
+  
   function handleScripts(html) {
     if(html){
        
-        
         var scripts =  html.body.querySelectorAll('script');
         var variableRegex = /let\s+(\w+)\s*=\s*([\s\S]*?)(?:;|$)/g;
         var importRegex = /import\s+{(.*?)}\s+from\s+['"](.*?)['"]/g;
-      
+ 
         var beforeRenderScripts = [];
         var afterRenderScripts = [];
         for (var i = 0; i < scripts.length; i++) {
@@ -1199,9 +1203,8 @@ function doxMethods(element) {
       
             while ((match = variableRegex.exec(s)) !== null) {
               var name = match[1].trim();
-              var value = match[2].trim().replace(/"/g, '');
+              var value = match[2].trim() 
       
-               
 
               if (value.includes('{')) {
                 value = value.replace('{', '').replace('}', '').trim();
@@ -1214,12 +1217,15 @@ function doxMethods(element) {
                 });
               
               }
-              
-              if(isNaN(value) && !Array.isArray(value)){
+             
+             
+              if(value.startsWith("'") || value.startsWith('"')){
+                value = value.replace(/"/g, '');
                 window.variables[name] = value;
                 window[name] = value;
                 html = handleVariables(html);
               }else{
+                
                 value = eval(value);
                 window.variables[name] = value;
                 window[name] = value;
@@ -1231,6 +1237,8 @@ function doxMethods(element) {
             
                
             }
+          
+             
           } else if (script.getAttribute('execute') === 'beforeRender') {
             var s = script.innerHTML;
             beforeRenderScripts.push(s);
@@ -1258,15 +1266,27 @@ function doxMethods(element) {
                   obj[vname] = vvalue;
                   return obj;
                 });
-              
+                 
+                
+                    
 
               }
-              
+            
+              var elementsWithProp = html.querySelectorAll(`[${name}]`);
+              elementsWithProp.forEach(function (el) {
+                  var propValue = el.getAttribute(name);
+                 el.innerHTML = el.innerHTML.replaceAll('{{' + name + '}}', propValue);
+                 el.removeAttribute(name);
+              });
+
+               
+
                 value = eval(value);
                 window.props[name] = value;
-            
-               
-                
+                window[name] = value;
+                 
+                 
+                 
               
             }
             
@@ -1314,7 +1334,7 @@ function doxMethods(element) {
               }
               let s = document.createElement('script');
               let id = name + '-script';
-              
+               
               if(!document.getElementById(id)){
                 s.innerHTML = script;
                 s.type = 'module';
@@ -1341,30 +1361,20 @@ function doxMethods(element) {
            
 
             
-            Object.keys(window.props).forEach(function(prop) {
-                
-                   
-                if(htm.querySelector(name) && htm.querySelector(name).getAttribute(prop)){
-                    window.props[prop] = window.props[prop].replace(/"/g, '');
-                    
-                    html.querySelector(name).outerHTML = html.querySelector(name).outerHTML.replaceAll('{{'+prop+'}}',  htm.querySelector(name).getAttribute(prop));
-                    
-                }else if(htm.querySelector(name) && htm.querySelector(name).getAttribute('props') && htm.querySelector(name).getAttribute('props').includes(prop)){
-                    window.props[prop] = window.props[prop].replace(/"/g, '');
-                    html.querySelector(name).outerHTML = html.querySelector(name).outerHTML.replaceAll('{{'+prop+'}}', window.props[prop]);
-                    
-                }else{
-                    html = handleProps(html);
-                }
-                 
-                      
-                    
-               
-             });
+            
             // Replace the import with the html
             if(htm.querySelector(name)){
+               
             htm.querySelectorAll(name).forEach(function(el) {
-                el.outerHTML = html.body.innerHTML;
+               let element = document.createElement(el.tagName);
+              
+               // setall attributes
+                let attributes = el.attributes;
+                for(let i = 0; i < attributes.length; i++) {
+                  element.setAttribute(attributes[i].name, attributes[i].value);
+                } 
+                element.innerHTML = html.body.innerHTML;
+                el.parentNode.replaceChild(element, el);
             });
         }
               
@@ -1415,7 +1425,7 @@ function doxMethods(element) {
                document.head.appendChild(s);
              }
           } else {
-            
+           
             let s = document.createElement('script');
             let id = template.name + '-script';
             if(!document.getElementById(id)){
@@ -1461,7 +1471,12 @@ function doxMethods(element) {
                 } 
               }
             });
-
+             
+          
+            Object.keys(window.props).forEach(function(variable) {
+              let regex = new RegExp('{{' + variable + '}}', 'g');
+              html.body.innerHTML = html.body.innerHTML.replaceAll(regex, window.props[variable]);
+            });
             template.data = html.body.innerHTML;
 
             afterRenderScripts.forEach(function(script) {
@@ -1473,9 +1488,11 @@ function doxMethods(element) {
                   s.type = 'module';
                   s.id = id;
                   document.head.appendChild(s);
+                  
                 }
                 
             });
+           
             return template;
           });
       })
