@@ -1,6 +1,13 @@
-# html-dox
+## [Html-Dox](https://malikwhitten67.github.io/html-dox/) [![GitHub license](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/MalikWhitten67/html-dox/blob/main/LICENSE)
 
-A fast sequential dom library with cohesive syntax!
+### Fast pwa optimized sequential dom lib
+
+* Sequential - Dox adopts a unique approach called sequential processing. It treats all files as strings and efficiently splits the values, allowing for smooth manipulation of data. This method significantly contributes to faster rendering and improved performance, making your single-page applications (SPAs) highly responsive.
+* Component-based - Similar to popular frameworks like React, Dox follows a component-based architecture. This modularity enables you to build your application in smaller, reusable components. This approach offers several benefits, particularly when collaborating with other developers. Additionally, you have the flexibility to write inline JavaScript within components, facilitating a dynamic and interactive user experience.
+* Learn once - Dox focuses on simplicity and ease of use. It introduces new features only when necessary and adheres to established syntax constraints. This means you won't have to worry about constantly relearning the framework or dealing with major changes. Dox keeps it fast and straightforward, as it primarily utilizes raw HTML with enhanced functionality.
+
+With Dox, you can build performant web applications efficiently and enjoy a seamless development experience.
+
 
 | Browser       |  Supported    | 
 | ------------- |:-------------:| 
