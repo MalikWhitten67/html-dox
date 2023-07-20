@@ -1,4 +1,5 @@
 let imports = document.querySelector('meta[imports]').getAttribute('imports');
+let debugOn = document.querySelector('meta[debug]').getAttribute('debug') === 'true';
 let hooked = false;
 imports = imports.split(',');
 let templates = [];
@@ -127,9 +128,10 @@ let methods = {
 
    
 
-
+    
     document.getElementById(methods.rootElement).innerHTML = window[$elName];
     window.postMessage({ render: $elName }, "*");
+
     hooked = true;
   },
   return: () => {
@@ -139,7 +141,7 @@ let methods = {
     if (methods.hashChangeListener) {
       window.removeEventListener("hashchange", methods.hashChangeListener);
       methods.hashChangeListener = null;
-      console.log("removed last event listener")
+     
     }
   },
   sendStatus: (msg, code) => {
@@ -148,7 +150,7 @@ let methods = {
     }
 
     if (typeof code === 'number') {
-      document.getElementById(this.rootElement).innerHTML = JSON.stringify({ msg, code });
+      document.getElementById(methods.rootElement).innerHTML = JSON.stringify({ msg, code });
       hooked = true;
     } else {
       throw new Error("Invalid status code");
@@ -160,16 +162,17 @@ let methods = {
 
   redirect: (url) => {
 
+    url = url.replace('#', '');
     if (hooked) {
       throw new Error("Cannot send headers after they where already sent please refrain from using double res functions and call res.return() to resend to client");
     }
-    window.location.hash = url;
+    window.location.hash = '#' + url;
     hooked = true;
 
   },
 
   sendFile: (file) => {
-    let element = this.rootElement
+    let element = methods.rootElement;
     if (hooked) {
       throw new Error("Cannot send headers after they where already sent please refrain from using double res functions and call res.return() to resend to client");
     }
@@ -780,6 +783,9 @@ function handleVariables(html) {
           let vvalue = v[vname];
           let regex = new RegExp('{{' + variable + '.' + vname + '}}', 'g');
           html.body.innerHTML = html.body.innerHTML.replaceAll(regex, vvalue);
+          if(debugOn) {
+            console.log(`[DoxDom: ${regex}]`, "assert");
+          }
 
         });
       });
@@ -813,6 +819,7 @@ function handleProps(html) {
       if (element.getAttribute(prop)) {
          
         window[prop] = element.getAttribute(prop);
+         
         element.outerHTML = element.outerHTML.replaceAll(regex, window[prop]);
       }
     });
@@ -825,26 +832,15 @@ function handleProps(html) {
 }
 function doxMethods(element) {
 
+ 
   element.on = function (event, callback) {
-
-    // check if document registered the event
-    if (element) {
-      element.addEventListener(event, callback);
-    }
-
-
-    // if not keep checking until it is
-    let timer = setInterval(function () {
-      if (document.querySelector(element.tagName)) {
-
-        document.querySelector(element.tagName).addEventListener(event, callback);
-        clearInterval(timer);
-      }
-    }, 1000);
-
-
-    return element;
-  }
+    document.addEventListener(event, function (e) {
+      if(element.id && e.target.id == element.id) {
+        callback(e);
+      } 
+    })
+  };
+  
   element.toggleClass = function (className) {
     if (element.classList.contains(className)) {
       element.classList.remove(className);
@@ -963,6 +959,7 @@ function setDox(html) {
     },
 
     awaitElement: async function (selector) {
+     
       let element = document.querySelector(selector);
     
       if (element) {
@@ -1139,9 +1136,11 @@ function handleLogic(html) {
 
   let match = content.match(ifRegex);
   while (match) {
-    const [fullMatch, condition, ifStatement, elseStatement] = match;
+    let [fullMatch, condition, ifStatement, elseStatement] = match;
+     condition = condition.replaceAll('&gt;', '>').replaceAll('&lt;', '<').replaceAll('&amp;', '&');
+    // replace &gt; with > && &lt; with <
     let processedStatement;
-
+    
     if (eval(condition.trim())) {
       processedStatement = ifStatement.includes('return') ? ifStatement : `<script>${ifStatement}</script>`;
     } else {
@@ -1149,6 +1148,7 @@ function handleLogic(html) {
     }
      
 
+    
     content = content.replace(fullMatch, processedStatement);
     match = content.match(ifRegex);
   }
@@ -1157,6 +1157,98 @@ function handleLogic(html) {
   html.body.innerHTML = content;
   return html;
 }
+
+let memory = {}; // Create a memory object to store the initial state and elements
+
+function handleState(html) {
+  let content = html.body.innerHTML;
+  let stateRegex = /{{\s*state\.([\s\S]*?)\s*}}/g;
+  let matches = content.match(stateRegex);
+
+  if (matches) {
+    matches.forEach(function (m) {
+      let stateName = m.replace('{{state.', '').replace('}}', '').trim();
+      let stateValue = window.state[stateName] || 'no_value';
+
+      // Check if the state expression is inside a <slot> element
+      if (html.body.querySelector('dox-shadow') && html.body.querySelector('dox-shadow').innerHTML.includes(m)) {
+        if(debugOn) {
+          console.log('[Setting up state] ', stateName, stateValue)
+        }
+        let slot = html.body.querySelector('dox-shadow');
+        content = html.body.innerHTML;
+
+        if (slot.children.length > 0) {
+          slot.querySelectorAll('*').forEach(function (element) {
+            // Check if inside of an attribute or HTML
+            let attributes = element.attributes;
+            for (let i = 0; i < attributes.length; i++) {
+              if (attributes[i].value.includes(m)) {
+                attributes[i].value = attributes[i].value.replaceAll(m, stateValue);
+                memory[stateName] = {
+                  element: element,
+                  attribute: attributes[i].name,
+                  currentValue: stateValue,
+                };
+              }
+            }
+            if (element.innerHTML.includes(m)) {
+              element.innerHTML = element.innerHTML.replaceAll(m, stateValue);
+              memory[stateName] = {
+                element: element,
+                currentValue: stateValue,
+              };
+            }
+          });
+        } else {
+          console.log('slot has no children');
+          slot.innerHTML = slot.innerHTML.replaceAll(m, stateValue);
+          memory[stateName] = {
+            element: slot,
+            currentValue: stateValue,
+          };
+        }
+        slot.setAttribute('data-state', stateName);
+        content = html.body.innerHTML;
+        html.body.innerHTML = content;
+      }
+
+      
+    });
+
+    // Update the HTML content with the modified version
+    
+
+    // Set up effects for each state to track changes
+    for (let stateName in memory) {
+       
+
+      effect(stateName, async function (value) {
+        if(debugOn) {
+          console.log('[State Change] ', stateName, value)
+        }
+        window.renderLock = true;
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        let el = await dox.awaitElement(`[data-state="${stateName}"]`);
+        el.innerHTML = el.innerHTML.replaceAll(memory[stateName].currentValue, value);
+      
+        memory[stateName].currentValue = value;
+        window.postMessage({dox:'stateChange', message:' Do not update', kill:'$true'}, '*')
+        window.renderLock = false;
+
+        
+      });
+    }
+  }
+
+  return html;
+}
+
+
+
+
+
+
 
 
 function executeStatement(statement) {
@@ -1172,7 +1264,9 @@ function executeStatement(statement) {
         const func = new Function(returnValue);
         return func() || '';
       } catch (error) {
-        console.error('Error executing function:', error);
+        if(debugOn) {
+          console.log('[Error] ', error)
+        }
         return '';
       }
     } else {
@@ -1364,17 +1458,9 @@ function handleScripts(html) {
 
       }
     }
+    
 
-    if (html.body.outerHTML.includes('${{')) {
-      let matches = html.body.outerHTML.match(/\${{([\s\S]*?)}}/g);
-      if (matches) {
-        matches.forEach(function (match) {
-          let js = match.replace('${{', '').replace('}}', '');
-          let value = eval(js);
-          html.body.outerHTML = html.body.outerHTML.replaceAll(match, value);
-        });
-      }
-    }
+    
 
     return {
       html: html,
@@ -1385,6 +1471,7 @@ function handleScripts(html) {
 
 }
 
+let cached = {};
 
 function handleImports(htm) {
   let imports = htm.querySelectorAll('import');
@@ -1394,6 +1481,12 @@ function handleImports(htm) {
     let src = imports[i].getAttribute('src');
     let name = src.split('/').pop().split('.')[0].toLowerCase();
 
+    if (cached[name]) {
+      let element = document.createElement(name);
+      element.innerHTML = cached[name];
+      imports[i].replaceWith(element);
+      continue;
+    }
 
     let fetchPromise = fetch(src)
       .then(function (response) {
@@ -1406,6 +1499,7 @@ function handleImports(htm) {
 
           html = handleLogic(html);
           html = handleMarkdown(html);
+          html = handleState(html);
 
           // Execute the beforeRender scripts
           beforeRenderScripts.forEach(function (script) {
@@ -1422,14 +1516,17 @@ function handleImports(htm) {
               if (!document.getElementById(id)) {
                 document.head.appendChild(s);
               }
-
-
             }
-
-
-
           });
 
+          // check if element has slot for children
+          if (htm.querySelector(name) && htm.querySelector(name).querySelector('slot')) {
+            dox.awaitElement(name).then(function (element) {
+              let slot = element.querySelector('slot');
+              let children = document.querySelector(name).innerHTML;
+              slot.innerHTML = children;
+            });
+          }
 
           // remove ``` with <!-- -->
           let matches = html.body.outerHTML.match(/```([\s\S]*?)```/g);
@@ -1437,20 +1534,15 @@ function handleImports(htm) {
           if (matches) {
             matches.forEach(function (match) {
               html.body.outerHTML = html.body.outerHTML.replaceAll(match, '<!-- ' + match + ' -->');
-            })
+            });
           }
-
-
-
-
 
           // Replace the import with the html
           if (htm.querySelector(name)) {
-
             htm.querySelectorAll(name).forEach(function (el) {
               let element = document.createElement(el.tagName);
 
-              // setall attributes
+              // set all attributes
               let attributes = el.attributes;
               for (let i = 0; i < attributes.length; i++) {
                 element.setAttribute(attributes[i].name, attributes[i].value);
@@ -1458,18 +1550,17 @@ function handleImports(htm) {
 
               element.innerHTML = html.body.innerHTML;
               el.replaceWith(element);
-
             });
-
           }
+
           importedElements.push({
             name: name,
             element: html
-          })
+          });
 
+          // Cache the HTML content
+          cached[name] = html.body.innerHTML;
         });
-
-
       });
 
     fetchPromises.push(fetchPromise);
@@ -1479,7 +1570,11 @@ function handleImports(htm) {
     return htm;
   });
 }
+
 function processElement(el) {
+  if(debugOn){
+    console.log('[Processing Engine]: Deriving values from dynamically appended element -> ', el.element);
+  }
   el = el.element;
 
   let parent = el.parentElement; // Use 'parentElement' instead of 'parent'
@@ -1496,10 +1591,11 @@ function processElement(el) {
 
       newel = handleVariables(newel);
       newel = handleMarkdown(newel);
-
+      newel = handleState(newel);
       // Find the corresponding element in the new HTML
       newel = newel.body.querySelector(tagName);
-
+      // awaitElement
+    
       // If the new element is empty, don't replace the original element
       if (!newel || newel.innerHTML.trim() === '') {
         return;
@@ -1512,6 +1608,9 @@ function processElement(el) {
       for (let i = 0; i < el.attributes.length; i++) {
         let { name, value } = el.attributes[i];
         ele.setAttribute(name, value);
+        if(debugOn){
+          console.log(`[Processing Engine]: Setting attribute for <${tagName}/> -> `, name, value);
+        }
       }
 
       // Copy over the content from the new HTML's element to the new element
@@ -1533,8 +1632,19 @@ function processElement(el) {
           let { name, value } = e.attributes[i];
           duplicate.setAttribute(name, value);
         }
+        
         duplicate.innerHTML = ele.innerHTML;
-        e.replaceWith(duplicate);
+        
+        try {
+          e.replaceWith(duplicate);
+        } catch (error) {
+          if(debugOn){
+            console.log('[Processing Engine]: Error replacing element -> ', error);
+          }
+        }
+        if(debugOn){
+          console.log('[Processing Engine]: Replacing dynamic element -> ', e, duplicate);
+        }
       });
     }
   });
@@ -1554,27 +1664,64 @@ function observeNewElements() {
       isProcessing = true;
 
       if (mutation.type === 'childList') {
+        window.onmessage = function (event) {
+          console.log(event.data);
+          if (event.data.dox == 'stateChange' && event.data.kill == '$true') {
+            return;
+          }
+        };
         let addedNodes = mutation.addedNodes;
         addedNodes.forEach(function (node) {
           if (node.tagName) {
             let tagName = node.tagName.toLowerCase();
             let el = document.querySelector(tagName) || document.body.querySelectorAll(tagName);
             let parent = node.parentNode;
-            if (el && !window[tagName] && tagName !== 'import') {
 
+             if(debugOn){
+              console.log('[Processing Engine]: New element added -> ', el, parent, {locked: window.renderLock});
+             }
+            if (!window.renderLock) {
+              // Check if the element's tagName is not the same as the state element's tag
+              if(!parent.getAttribute('data-state')) {
+                processElement({
+                  element: el,
+                  parent: parent,
+                });
+                document.body.innerHTML = handleProps(document).body.innerHTML;
+                if(debugOn){
+                   // magenta text
+                  console.log('%c[Processing Engine]: waking up 🥱 ', 'color: #ff00ff');
+                }
+              }
+              
+              if (document.body.innerHTML.includes('${{')) {
+                let matches = document.body.innerHTML.match(/\${{([\s\S]*?)}}/gs);
+                if (matches) {
+                  matches.forEach(function (match) {
+                    let js = match.replace('${{', '').replace('}}', '');
+                    js = js.replaceAll('&gt;', '>').replaceAll('&lt;', '<');
+                    // replace strings and check for null instance
+                    
+                    let value;
+                    try {
+                    value = eval(js);
+                    } catch (error) {
+                      
+                      if(debugOn){
+                        console.error('%c[Js Parse Engine]: 😭 Error parsing ' + match, 'reason: ' + error, 'parent',  el)  
+                      }
+                    }
 
-              parent = el.parentNode;
-
-              processElement({
-                element: el,
-                parent: parent
-              });
-              // hndlelogic
-
-              document.body.innerHTML = handleProps(document).body.innerHTML;
-
+                    document.body.innerHTML = document.body.innerHTML.replaceAll(match, value);
+                    if(debugOn){
+                       // dark green text
+                      console.log(`%c[Js Parse Engine]: Replacing ${match} with -> `,  'color: #006400', value);
+                    }
+                    return;
+                  });
+                }
+              }
             }
-
           }
         });
       }
@@ -1592,6 +1739,7 @@ function observeNewElements() {
     subtree: true,
   });
 }
+
 Promise.all(fetchPromises)
   .then(function (fetchedTemplates) {
     templates = fetchedTemplates;
@@ -1600,9 +1748,13 @@ Promise.all(fetchPromises)
         let d = parser.parseFromString(template.data, 'text/html');
         let matches = d.body.outerHTML.match(/```([\s\S]*?)```/g);
 
+
         if (matches) {
           matches.forEach(function (match) {
             d.body.outerHTML = d.body.outerHTML.replaceAll(match, '<!-- ' + match + ' -->');
+            if(debugOn){
+              console.log('[Comment Parser]: Replacing' + '```' + match + '```' + ' with ' + '<!-- ' + match + ' -->');
+            }
           })
         }
         let { beforeRenderScripts } = handleScripts(d);
@@ -1623,9 +1775,15 @@ Promise.all(fetchPromises)
             if (!document.getElementById(id)) {
               s.innerHTML = script;
               s.type = 'module';
-              cons
+              
               s.id = id;
-              document.head.appendChild(s);
+              try {
+                document.head.appendChild(s);
+               } catch (error) {
+                  if(debugOn){
+                    console.log('[BeforeRender Execution Engine]: something went wrong -> ', error);
+                  }
+               }
             }
           } else {
 
@@ -1636,9 +1794,20 @@ Promise.all(fetchPromises)
               s.type = 'module';
 
               s.id = id;
+             try {
               document.head.appendChild(s);
+             } catch (error) {
+                if(debugOn){
+                  console.log('[BeforeRender Execution Engine]: something went wrong -> ', error);
+                }
+             }
 
             }
+          }
+          if(debugOn){
+            let color = script.includes('fetch') ? '#ff00ff' : '#006400';
+            let msg = '[BeforeRender Execution Engine]: Executing script -> ' + script;
+            console.log('%c' + msg, 'color: ' + color);
           }
         });
 
@@ -1685,11 +1854,17 @@ Promise.all(fetchPromises)
 
               html.body.innerHTML = html.body.innerHTML.replaceAll(regex, window.props[variable]);
             });
-            html = handleLogic(html);
+            if(debugOn){
+              console.log('[Template Parser]: Parsing template -> ', template);
+            }
+
             html = handleMarkdown(html);
             html = handleVariables(html);
-
+            html = handleLogic(html);
+            html = handleState(html);
             template.data = html.body.innerHTML;
+
+            
 
 
             return {
@@ -1704,7 +1879,21 @@ Promise.all(fetchPromises)
     let scripts = updatedTemplates
     updatedTemplates.forEach(function (template) {
 
-
+      if (template.template.data.includes('${{')) {
+        let matches =  template.template.data.match(/\${{([\s\S]*?)}}/g);
+        if (matches) {
+          matches.forEach(function (match) {
+            
+            let js = match.replace('${{', '').replace('}}', '');
+            js = js.replaceAll('&gt;', '>').replaceAll('&lt;', '<');
+            let value = eval(js);
+            template.template.data = template.template.data.replaceAll(match, value);
+          });
+        }
+      }
+      if(debugOn){
+        console.log('[Js Parse Engine]: Parsing template -> ', template);
+      }
       window[template.template.name] = template.template.data;
       window.dox = dox;
 
@@ -1731,10 +1920,10 @@ Promise.all(fetchPromises)
             if (!document.getElementById(id)) {
 
               document.head.appendChild(script);
+              
             }
 
-
-
+             
           })
 
       }
