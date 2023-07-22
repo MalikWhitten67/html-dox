@@ -1,5 +1,5 @@
 let imports = document.querySelector('meta[imports]').getAttribute('imports');
-let debugOn = document.querySelector('meta[debug]').getAttribute('debug') === 'true';
+let debugOn = document.querySelector('meta[debug]') ? document.querySelector('meta[debug]').getAttribute('debug') : false;
 let hooked = false;
 imports = imports.split(',');
 let templates = [];
@@ -9,7 +9,6 @@ window.variables = {};
 window.state = {};
 window.props = {};
 
-// Create an array of fetch promises
 let fetchPromises = imports.map(function (imported) {
   let name = imported.split('/').pop().split('.')[0].toLowerCase();
   return fetch(imported)
@@ -799,6 +798,51 @@ function handleVariables(html) {
 
 
 }
+
+function executeJs(js) {
+   
+  try {
+   
+    let output = eval(js);
+ 
+   
+
+    // Return the output
+    return output;
+  } catch (e) {
+    if (debugOn) {
+      console.error(`[DoxDom: ${e}]`, "assert");
+    }
+    console.error(e);
+    return null;
+  }
+}
+
+
+function eventAttributes(html) {
+  let elements = html.body.querySelectorAll('*');
+  let events = [
+    '*click',
+    '*dblclick',
+    '*mousedown',
+    '*mouseup',
+    '*mousemove',
+    '*mouseover',
+  ]
+  elements.forEach(function (element) {
+     events.forEach(function (event) {
+      if (element.getAttribute(event)) {
+        let code = element.getAttribute(event);
+        element.removeAttribute(event);
+        element.addEventListener(event.substring(1), function (e) {
+          executeJs(code);
+        });
+      }
+     })
+  })
+}
+
+
 function handleProps(html) {
   Object.keys(window.props).forEach(function (prop) {
     if (Array.isArray(window.props[prop])) {
@@ -932,12 +976,14 @@ function getState(name) {
   return window.state[name];
 }
 function setState(name, value) {
+  
   window.postMessage({
     type: 'state',
     name: name,
-    value: value
+    value:  value
   }, '*');
-  window.state[name] = value;
+ 
+  window.state[name] = value
 
 }
 function effect(name, callback) {
@@ -1031,7 +1077,7 @@ function setDox(html) {
           setStyles();
           if (time && tdo) {
             setTimeout(function () {
-              eval(tdo);
+              executeJs(tdo);
             }, time);
           }
           alert(options.message.required);
@@ -1042,7 +1088,7 @@ function setDox(html) {
           setStyles();
           if (time && tdo) {
             setTimeout(function () {
-              eval(tdo);
+              executeJs(tdo);
             }, time);
           }
           alert(options.message.invalid);
@@ -1053,7 +1099,7 @@ function setDox(html) {
             setStyles();
             if (time && tdo) {
               setTimeout(function () {
-                eval(tdo);
+                executeJs(tdo);
               }, time);
             }
             alert(options.message.invalid);
@@ -1082,7 +1128,7 @@ function setDox(html) {
           // Handle required password validation
           if (time && tdo) {
             setTimeout(function () {
-              eval(tdo);
+              executeJs(tdo);
             }, time);
           }
           setStyles();
@@ -1093,7 +1139,7 @@ function setDox(html) {
           // Handle minimum length password validation
           if (time && tdo) {
             setTimeout(function () {
-              eval(tdo);
+              executeJs(tdo);
             }, time);
           }
           setStyles();
@@ -1104,7 +1150,7 @@ function setDox(html) {
           // Handle maximum length password validation
           if (time && tdo) {
             setTimeout(function () {
-              eval(tdo);
+              executeJs(tdo);
             }, time);
           }
           setStyles();
@@ -1141,12 +1187,13 @@ function handleLogic(html) {
     // replace &gt; with > && &lt; with <
     let processedStatement;
     
-    if (eval(condition.trim())) {
+    if (executeJs(condition)) {
       processedStatement = ifStatement.includes('return') ? ifStatement : `<script>${ifStatement}</script>`;
     } else {
       processedStatement = elseStatement && !elseStatement.includes('#if') ? (elseStatement.includes('return') ? elseStatement : `<script>${elseStatement}</script>`) : '';
     }
      
+    
 
     
     content = content.replace(fullMatch, processedStatement);
@@ -1239,6 +1286,7 @@ function handleState(html) {
         
       });
     }
+   
   }
 
   return html;
@@ -1360,12 +1408,13 @@ function handleMarkdown(html) {
 
 
 
-
+ let deferedScriptsFunctions =  {}
 
 function handleScripts(html) {
   if (html) {
 
     var scripts = html.body.querySelectorAll('script');
+    
     var variableRegex = /let\s+(\w+)\s*=\s*([\s\S]*?)(?:;|$)/g;
     var importRegex = /import\s+{(.*?)}\s+from\s+['"](.*?)['"]/g;
 
@@ -1374,8 +1423,9 @@ function handleScripts(html) {
     for (var i = 0; i < scripts.length; i++) {
       var script = scripts[i];
 
+       
 
-      if (!script.hasAttribute('execute') && !script.hasAttribute('props')) {
+      if (!script.hasAttribute('execute') && !script.hasAttribute('props') && !script.hasAttribute('defered')) {
         var s = script.innerHTML;
         var match;
 
@@ -1397,7 +1447,7 @@ function handleScripts(html) {
           }
 
 
-          window.variables[name] = eval(value);
+          window.variables[name] =   eval(value);
           window[name] = eval(value);
 
 
@@ -1410,7 +1460,7 @@ function handleScripts(html) {
       } else if (script.getAttribute('execute') === 'beforeRender') {
         var s = script.innerHTML;
         beforeRenderScripts.push(s);
-      }
+      } 
 
       else if (script.hasAttribute('props')) {
         var s = script.innerHTML;
@@ -1445,7 +1495,7 @@ function handleScripts(html) {
 
 
 
-          value = eval(value);
+          value =  executeJs(value);
           window.props[name] = value;
           window[name] = value;
 
@@ -1470,6 +1520,50 @@ function handleScripts(html) {
   }
 
 }
+window.args = {};
+ // Add a flag to check if the script has already been fetched
+const fetchedScripts = {};
+
+window.defer = async function (e, name, fn) {
+  e.preventDefault(); // Prevent the default click behavior
+
+  let script = await dox.awaitElement('#' + name);
+
+  if (script && !fetchedScripts[name]) {
+    try {
+      let data = await fetch(script.src).then((response) => response.text());
+
+      // split async or regular
+      let async = data.includes('async');
+     
+      if(match) {
+        let [fullMatch, name, args, body] = match;
+        console.log(fullMatch, name, args, body)
+      }
+
+      fetchedScripts[name] = true;
+    } catch (error) {
+      if (debugOn) {
+        console.log('[Defer Error] ', error, fn);
+      }
+      return;
+    }
+  }
+
+  try {
+    fn();
+  } catch (error) {
+    if (debugOn) {
+      console.log('[Defer Error] ', error, fn);
+    }
+    return;
+  }
+};
+
+
+
+
+
 
 let cached = {};
 
@@ -1650,6 +1744,7 @@ function processElement(el) {
   });
 }
 
+ 
 
 // Create a function to handle new elements and set up MutationObserver
 function observeNewElements() {
@@ -1682,7 +1777,7 @@ function observeNewElements() {
              }
             if (!window.renderLock) {
               // Check if the element's tagName is not the same as the state element's tag
-              if(!parent.getAttribute('data-state')) {
+              if(parent && !parent.hasAttribute('data-state')) {
                 processElement({
                   element: el,
                   parent: parent,
@@ -1704,7 +1799,7 @@ function observeNewElements() {
                     
                     let value;
                     try {
-                    value = eval(js);
+                    value = executeJs(js);
                     } catch (error) {
                       
                       if(debugOn){
@@ -1730,7 +1825,11 @@ function observeNewElements() {
     });
 
     observeNewElements.observerActive = false;
+  
     observer.disconnect();
+    if(debugOn){
+        console.log('%c[Processing Engine]: sleeping 😴', 'color: #ff00ff');
+    }
     observeNewElements(); // Reconnect the observer for future changes
   });
 
@@ -1766,7 +1865,7 @@ Promise.all(fetchPromises)
 
           if (script.includes('fetch')) {
             setDox(d);
-            let fetchPromise = eval(script); // Execute fetch request
+            let fetchPromise =  executeJs(script);
             fetchPromises.push(fetchPromise);
           } else if (script.includes('dox')) {
             setDox(d);
@@ -1886,7 +1985,7 @@ Promise.all(fetchPromises)
             
             let js = match.replace('${{', '').replace('}}', '');
             js = js.replaceAll('&gt;', '>').replaceAll('&lt;', '<');
-            let value = eval(js);
+            let value =  executeJs(js);
             template.template.data = template.template.data.replaceAll(match, value);
           });
         }
