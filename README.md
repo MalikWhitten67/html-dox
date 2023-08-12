@@ -16,14 +16,13 @@
 
 | Step                                               | Description                                                                      |
 | -------------------------------------------------- | -------------------------------------------------------------------------------- |
-| Components/Pages?                                  | Are the components or pages being used?                                           |
+| Components/Pages & config?                                  | Are  their any pages/components imported and is their a config?                             | Register pages as functions for dynamic rendering | Dox dynamically renders pages - based on state change           
 | Sequential Selection →                             | Select components/pages in a sequential order                                    |
 | Value Splitting/Value Replacing                   | Replace props variables and JavaScript expressions in component scopes, base level scope components, and base pages |
-| Execution of Before Scripts* →                      | Execute any specified scripts before the manipulation                            |
-| Execution of JavaScript Literal Expressions        | Execute JavaScript literal expressions                                            |
+| Execution of scripts/parsing types?* →                      | Execute any specified scripts before the manipulation - and checking types                            |
 | Combining Imported Components to Main Pages*       | Combine the imported components with the main pages                               |
 | Returns as a Full Webpage* →                        | Generate a complete webpage with the manipulated components/pages                |
-| End →                                             | End of the process                                                               |
+| End / Listen for changes →                                             | End of the process   - listens for changes to rerender the page                                                            |
 | Router?                                            | Is there a router involved in the framework?                                      |
 
  
