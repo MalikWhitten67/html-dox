@@ -11,20 +11,19 @@
 
 
  
+ 
+## How it Works
 
-## How it works
-
-| Step                                               | Description                                                                      |
-| -------------------------------------------------- | -------------------------------------------------------------------------------- |
-| Components/Pages?                                  | Are the components or pages being used?                                           |
-| Sequential Selection →                             | Select components/pages in a sequential order                                    |
-| Value Splitting/Value Replacing                   | Replace props variables and JavaScript expressions in component scopes, base level scope components, and base pages |
-| Execution of Before Scripts* →                      | Execute any specified scripts before the manipulation                            |
-| Execution of JavaScript Literal Expressions        | Execute JavaScript literal expressions                                            |
-| Combining Imported Components to Main Pages*       | Combine the imported components with the main pages                               |
-| Returns as a Full Webpage* →                        | Generate a complete webpage with the manipulated components/pages                |
-| End →                                             | End of the process                                                               |
-| Router?                                            | Is there a router involved in the framework?                                      |
+| Step                                      | Description                                                                      |
+| ----------------------------------------- | -------------------------------------------------------------------------------- |
+| Components/Pages/config                   | Check if there are any components and pages in use. Convert them into functions and set the configuration (if supplied) to `window.config` for later use. |
+| Sequential Selection                      | Select components/pages in a sequential order.                                  |
+| Value Splitting/Value Replacing            | Replace variables with current variable state and set listeners for state changes. |
+| Execution of Scripts                      | Execute any specified `<script>` tags.                                         |
+| Combining Imported Components to Main Page functions| Combine the imported components with the main pages.                           |
+| Bind templates to window.templates               | Generate a complete webpage with the manipulated components/pages. binded into the template object           |
+| End                                       | End of the process.                                                            |
+| Router                                   | Determine if there's a router involved in the framework.                        |
 
  
 
@@ -37,32 +36,64 @@ Dox has been developed to be easy to use/install all u have to do is add a `<scr
 
 We have a few [Examples](https://github.com/MalikWhitten67/html-dox/tree/main/examples) - that show you how each aspect of dox is used.
 ```html
-<container>
- <script props>
-  let size = "w-full";
-  let font = "font-mono";
-  let color = "text-slate-500";
- </script>
-${{
-   if(window.screen.height > 768){
-    size = 'w-5/6'
-    return;
-   }
- }}
-  // use props anywhere
-</container>
+ <import src="/dox3.0/components/card.html"></import>
+<script>
+    let count = getState('count') || 0;
+    let array = fetch('https://jsonplaceholder.typicode.com/todos/1')
+        .then(response => response.json())
+        .then(json => json);
+  
+
+    async function increment() {
+        setState('count', ++count);
+        setState('array', await  array);
+    }
+</script>
+<script types>
+ 
+    interface count {
+            type: Number,
+    }
+    interface array {
+            type: Object,
+    }
+</script>
+<style>
+    div {
+        background-color: #eee;
+        padding: 20px;
+        border-radius: 5px;
+        margin: 20px;
+    }
+</style>
+<div>
+     <card></card>
+     <card></card>
+     <card></card>
+     ${
+        getState('count') > 5 ? `<card></card>` : 'Not Greater'
+     }
+</div>
  ```
 any other code
 ```
 
 </container>
 
-<!--main.html--->
+<!--card.html--->
 
-<container size="w-1/2" font="font-sans" color="text-sky-500">
-
- inside code
-
-</container>
+ <card>
+    <script execute>
+        console.log('Card Loaded');
+        console.log('you can execute js in your app')
+    </script>
+    <h1>Card</h1>
+    <p>Count: ${getState('count') || 0}</p>
+    <button onclick="increment()">Increment</button>
+    ${
+        getState('count') > 5 ? '<card></card>' : 'Not Greater'
+    }
+    <p>Array: ${getState('array') ? getState('array').title : `Woppy` } </p>
+</card>
 ```
-This example uses props - checks if window height is greater than 768 if so change size to w-5/6!
+This example shows the use of components in dox3

@@ -1,11 +1,11 @@
 # Security Policy
-
+All versions from 2.0 + will get performance & security upgrades up to 3 months!
 ## Supported Versions
 
-Security updates mean these versions will always get updated  - in rolling releases!
+
 | Version | Supported          |
 | ------- | ------------------ |
-| 1.4.x   | :white_check_mark: |
+| 2.0.x   | :white_check_mark: |
  
 
 ## Reporting a Vulnerability
