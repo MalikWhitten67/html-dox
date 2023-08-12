@@ -37,32 +37,64 @@ Dox has been developed to be easy to use/install all u have to do is add a `<scr
 
 We have a few [Examples](https://github.com/MalikWhitten67/html-dox/tree/main/examples) - that show you how each aspect of dox is used.
 ```html
-<container>
- <script props>
-  let size = "w-full";
-  let font = "font-mono";
-  let color = "text-slate-500";
- </script>
-${{
-   if(window.screen.height > 768){
-    size = 'w-5/6'
-    return;
-   }
- }}
-  // use props anywhere
-</container>
+ <import src="/dox3.0/components/card.html"></import>
+<script>
+    let count = getState('count') || 0;
+    let array = fetch('https://jsonplaceholder.typicode.com/todos/1')
+        .then(response => response.json())
+        .then(json => json);
+  
+
+    async function increment() {
+        setState('count', ++count);
+        setState('array', await  array);
+    }
+</script>
+<script types>
+ 
+    interface count {
+            type: Number,
+    }
+    interface array {
+            type: Object,
+    }
+</script>
+<style>
+    div {
+        background-color: #eee;
+        padding: 20px;
+        border-radius: 5px;
+        margin: 20px;
+    }
+</style>
+<div>
+     <card></card>
+     <card></card>
+     <card></card>
+     ${
+        getState('count') > 5 ? `<card></card>` : 'Not Greater'
+     }
+</div>
  ```
 any other code
 ```
 
 </container>
 
-<!--main.html--->
+<!--card.html--->
 
-<container size="w-1/2" font="font-sans" color="text-sky-500">
-
- inside code
-
-</container>
+ <card>
+    <script execute>
+        console.log('Card Loaded');
+        console.log('you can execute js in your app')
+    </script>
+    <h1>Card</h1>
+    <p>Count: ${getState('count') || 0}</p>
+    <button onclick="increment()">Increment</button>
+    ${
+        getState('count') > 5 ? '<card></card>' : 'Not Greater'
+    }
+    <p>Array: ${getState('array') ? getState('array').title : `Woppy` } </p>
+</card>
 ```
-This example uses props - checks if window height is greater than 768 if so change size to w-5/6!
+This example shows the use of components in dox3
