@@ -20,8 +20,8 @@
 | Sequential Selection                      | Select components/pages in a sequential order.                                  |
 | Value Splitting/Value Replacing            | Replace variables with current variable state and set listeners for state changes. |
 | Execution of Scripts                      | Execute any specified `<script>` tags.                                         |
-| Combining Imported Components to Main Pages| Combine the imported components with the main pages.                           |
-| Return as a Full Webpage                  | Generate a complete webpage with the manipulated components/pages.             |
+| Combining Imported Components to Main Page functions| Combine the imported components with the main pages.                           |
+| Bind templates to window.templates               | Generate a complete webpage with the manipulated components/pages. binded into the template object           |
 | End                                       | End of the process.                                                            |
 | Router                                   | Determine if there's a router involved in the framework.                        |
 
