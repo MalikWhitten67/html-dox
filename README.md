@@ -11,20 +11,19 @@
 
 
  
+ 
+## How it Works
 
-## How it works
-
-| Step                                               | Description                                                                      |
-| -------------------------------------------------- | -------------------------------------------------------------------------------- |
-| Components/Pages?                                  | Are the components or pages being used?                                           |
-| Sequential Selection →                             | Select components/pages in a sequential order                                    |
-| Value Splitting/Value Replacing                   | Replace props variables and JavaScript expressions in component scopes, base level scope components, and base pages |
-| Execution of Before Scripts* →                      | Execute any specified scripts before the manipulation                            |
-| Execution of JavaScript Literal Expressions        | Execute JavaScript literal expressions                                            |
-| Combining Imported Components to Main Pages*       | Combine the imported components with the main pages                               |
-| Returns as a Full Webpage* →                        | Generate a complete webpage with the manipulated components/pages                |
-| End →                                             | End of the process                                                               |
-| Router?                                            | Is there a router involved in the framework?                                      |
+| Step                                      | Description                                                                      |
+| ----------------------------------------- | -------------------------------------------------------------------------------- |
+| Components/Pages/config                   | Check if there are any components and pages in use. Convert them into functions and set the configuration (if supplied) to `window.config` for later use. |
+| Sequential Selection                      | Select components/pages in a sequential order.                                  |
+| Value Splitting/Value Replacing            | Replace variables with current variable state and set listeners for state changes. |
+| Execution of Scripts                      | Execute any specified `<script>` tags.                                         |
+| Combining Imported Components to Main Pages| Combine the imported components with the main pages.                           |
+| Return as a Full Webpage                  | Generate a complete webpage with the manipulated components/pages.             |
+| End                                       | End of the process.                                                            |
+| Router                                   | Determine if there's a router involved in the framework.                        |
 
  
 
