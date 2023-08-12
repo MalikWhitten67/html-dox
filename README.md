@@ -36,7 +36,7 @@ Dox has been developed to be easy to use/install all u have to do is add a `<scr
 
 We have a few [Examples](https://github.com/MalikWhitten67/html-dox/tree/main/examples) - that show you how each aspect of dox is used.
 ```html
- <import src="/dox3.0/components/card.html"></import>
+ <import src="/dox2.0/components/card.html"></import>
 <script>
     let count = getState('count') || 0;
     let array = fetch('https://jsonplaceholder.typicode.com/todos/1')
@@ -96,4 +96,4 @@ any other code
     <p>Array: ${getState('array') ? getState('array').title : `Woppy` } </p>
 </card>
 ```
-This example shows the use of components in dox3
+This example shows the use of components in dox2.0
